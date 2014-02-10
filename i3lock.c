@@ -32,6 +32,7 @@
 #include "xcb.h"
 #include "cursors.h"
 #include "unlock_indicator.h"
+#include "blur.h"
 #include "xinerama.h"
 
 /* We need this for libxkbfile */
@@ -60,6 +61,7 @@ static struct xkb_keymap *xkb_keymap;
 
 cairo_surface_t *img = NULL;
 bool tile = false;
+bool fuzzy = false;
 bool ignore_empty_password = false;
 
 /* isutf, u8_dec © 2005 Jeff Bezanson, public domain */
@@ -613,6 +615,7 @@ int main(int argc, char *argv[]) {
         {"no-unlock-indicator", no_argument, NULL, 'u'},
         {"image", required_argument, NULL, 'i'},
         {"tiling", no_argument, NULL, 't'},
+        {"fuzzy", no_argument, NULL, 'f'},
         {"ignore-empty-password", no_argument, NULL, 'e'},
         {NULL, no_argument, NULL, 0}
     };
@@ -620,7 +623,7 @@ int main(int argc, char *argv[]) {
     if ((username = getenv("USER")) == NULL)
         errx(1, "USER environment variable not set, please set it.\n");
 
-    while ((o = getopt_long(argc, argv, "hvnbdc:p:ui:te", longopts, &optind)) != -1) {
+    while ((o = getopt_long(argc, argv, "hvnbdc:p:ui:tfe", longopts, &optind)) != -1) {
         switch (o) {
         case 'v':
             errx(EXIT_SUCCESS, "version " VERSION " © 2010-2012 Michael Stapelberg");
@@ -653,6 +656,9 @@ int main(int argc, char *argv[]) {
             break;
         case 't':
             tile = true;
+            break;
+        case 'f':
+            fuzzy = true;
             break;
         case 'p':
             if (!strcmp(optarg, "win")) {
@@ -736,7 +742,7 @@ int main(int argc, char *argv[]) {
     xcb_change_window_attributes(conn, screen->root, XCB_CW_EVENT_MASK,
             (uint32_t[]){ XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 
-    if (image_path) {
+    if (image_path && !fuzzy) {
         /* Create a pixmap to render on, fill it with the background color */
         img = cairo_image_surface_create_from_png(image_path);
         /* In case loading failed, we just pretend no -i was specified. */
@@ -745,6 +751,28 @@ int main(int argc, char *argv[]) {
                     image_path, cairo_status_to_string(cairo_surface_status(img)));
             img = NULL;
         }
+    }
+
+    if (fuzzy) {
+        xcb_pixmap_t bg_pixmap = xcb_generate_id(conn);
+        xcb_create_pixmap(conn, screen->root_depth, bg_pixmap, screen->root,
+                      last_resolution[0], last_resolution[1]);
+
+        xcb_gcontext_t gc=xcb_generate_id(conn);
+        const uint32_t gc_values[] = {1};
+        xcb_create_gc(conn, gc, screen->root, XCB_GC_SUBWINDOW_MODE , gc_values);
+        xcb_copy_area(conn, screen->root, bg_pixmap, gc, 0, 0, 0, 0, last_resolution[0], last_resolution[1]);
+
+        cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
+        
+        img=cairo_image_surface_create(CAIRO_FORMAT_ARGB32, last_resolution[0], last_resolution[1]);
+        cairo_t * cr = cairo_create(img);
+        cairo_set_source_surface(cr, tmp, 0, 0);
+        cairo_paint(cr);
+        cairo_destroy(cr);
+        cairo_surface_destroy(tmp);
+
+        blur_image_surface(img, last_resolution[0]>>1);
     }
 
     /* Pixmap on which the image is rendered to (if any) */
