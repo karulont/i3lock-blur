@@ -10,9 +10,10 @@ endif
 CFLAGS += -std=c99
 CFLAGS += -pipe
 CFLAGS += -Wall
+CFLAGS += -g
 CPPFLAGS += -D_GNU_SOURCE
-CFLAGS += $(shell pkg-config --cflags cairo xcb-dpms xcb-xinerama xcb-atom xkbcommon xkbfile x11 x11-xcb)
-LIBS += $(shell pkg-config --libs cairo xcb-dpms xcb-xinerama xcb-atom xcb-image xkbcommon xkbfile x11 x11-xcb)
+CFLAGS += $(shell pkg-config --cflags cairo xcb-dpms xcb-xinerama xcb-atom xcb-composite xkbcommon xkbfile x11 x11-xcb)
+LIBS += $(shell pkg-config --libs cairo xcb-dpms xcb-xinerama xcb-atom xcb-image xcb-composite xkbcommon xkbfile x11 x11-xcb)
 LIBS += -lpam
 LIBS += -lev
 LIBS += -lm

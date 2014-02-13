@@ -10,6 +10,7 @@
 #include <xcb/xcb.h>
 #include <xcb/xcb_image.h>
 #include <xcb/xcb_atom.h>
+#include <xcb/composite.h>
 #include <xcb/dpms.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +24,9 @@
 
 xcb_connection_t *conn;
 xcb_screen_t *screen;
+
+extern xcb_window_t win;
+extern bool fuzzy;
 
 #define curs_invisible_width 8
 #define curs_invisible_height 8
@@ -82,6 +86,59 @@ xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen) {
     return NULL;
 }
 
+xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution, char *color);
+
+void xcb_send_expose_event(xcb_connection_t *conn, xcb_window_t win,int w, int h) {
+    xcb_expose_event_t *event = calloc(32, 1);
+
+    event->response_type = XCB_EXPOSE;
+    event->window = win;
+    event->x = 0;
+    event->y = 0;
+    event->width = w;
+    event->height = h;
+    event->count = 0;
+
+    //xcb_send_event(conn, false, win, XCB_EVENT_MASK_EXPOSURE, (char*)event);
+    uint32_t value[] = {XCB_BACKING_STORE_ALWAYS};
+    xcb_change_window_attributes(conn, win, XCB_CW_BACKING_STORE,value);
+    xcb_flush(conn);
+    free(event);
+}
+
+xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution) {
+
+    xcb_pixmap_t final_pixmap = create_bg_pixmap(conn, scr, resolution, "afffaf");
+
+    /* Generate a big enough pixmap */
+    /*xcb_pixmap_t final_pixmap = xcb_generate_id(conn);
+    xcb_create_pixmap(conn, scr->root_depth, final_pixmap, scr->root,
+                        resolution[0], resolution[1]);*/
+    xcb_gcontext_t gc=xcb_generate_id(conn);
+    const uint32_t gc_values[] = {1};
+    xcb_create_gc(conn, gc, screen->root, XCB_GC_SUBWINDOW_MODE , gc_values);
+
+    /* Iterate over all root window children */
+    xcb_generic_error_t* xcb_error;
+    xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
+                                    xcb_query_tree(conn,scr->root), &xcb_error);
+    xcb_window_t *children = xcb_query_tree_children(reply);
+    for (int i=0;i < reply->children_len; ++i) {
+        /* Skip lock window */
+        if (children[i] == win)
+            continue;
+
+        /* Copy area to final_pixmap */
+        xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(conn, xcb_get_geometry(conn, children[i]), &xcb_error);
+        xcb_copy_area(conn, children[i], final_pixmap, gc, 0, 0, geo->x, geo->y, geo->width, geo->height);
+        free(geo);
+    }
+
+    free(reply);
+
+    return final_pixmap;
+}
+
 xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution, char *color) {
     xcb_pixmap_t bg_pixmap = xcb_generate_id(conn);
     xcb_create_pixmap(conn, scr->root_depth, bg_pixmap, scr->root,
@@ -100,8 +157,22 @@ xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
 }
 
 xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, char *color, xcb_pixmap_t pixmap) {
+
+    if (fuzzy) {
+        xcb_composite_query_version_reply(conn,xcb_composite_query_version(conn, XCB_COMPOSITE_MAJOR_VERSION, XCB_COMPOSITE_MINOR_VERSION), NULL);
+        xcb_composite_get_overlay_window_reply_t *comp_win_reply = 
+            xcb_composite_get_overlay_window_reply(conn, 
+                    xcb_composite_get_overlay_window(conn, scr->root), NULL);
+
+        win = comp_win_reply->overlay_win;
+
+        xcb_composite_redirect_subwindows(conn, scr->root, 
+                XCB_COMPOSITE_REDIRECT_AUTOMATIC);
+    }
+    else {
+
     uint32_t mask = 0;
-    uint32_t values[3];
+    uint32_t values[4];
     xcb_window_t win = xcb_generate_id(conn);
 
     if (pixmap == XCB_NONE) {
@@ -115,12 +186,16 @@ xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, c
     mask |= XCB_CW_OVERRIDE_REDIRECT;
     values[1] = 1;
 
+    mask |= XCB_CW_SAVE_UNDER;
+    values[2] = 1;
+
     mask |= XCB_CW_EVENT_MASK;
-    values[2] = XCB_EVENT_MASK_EXPOSURE |
+    values[3] = XCB_EVENT_MASK_EXPOSURE |
                 XCB_EVENT_MASK_KEY_PRESS |
                 XCB_EVENT_MASK_KEY_RELEASE |
                 XCB_EVENT_MASK_VISIBILITY_CHANGE |
                 XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+
 
     xcb_create_window(conn,
                       XCB_COPY_FROM_PARENT,
@@ -151,7 +226,7 @@ xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, c
     /* Raise window (put it on top) */
     values[0] = XCB_STACK_MODE_ABOVE;
     xcb_configure_window(conn, win, XCB_CONFIG_WINDOW_STACK_MODE, values);
-
+}
     return win;
 }
 

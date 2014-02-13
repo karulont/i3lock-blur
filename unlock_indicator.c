@@ -48,6 +48,8 @@ extern cairo_surface_t *img;
 
 /* Whether the image should be tiled. */
 extern bool tile;
+/* Whether to use fuzzy mode. */
+extern bool fuzzy;
 /* The background color to use (in hex). */
 extern char color[7];
 
@@ -75,7 +77,12 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
 
     if (!vistype)
         vistype = get_root_visual_type(screen);
-    bg_pixmap = create_bg_pixmap(conn, screen, resolution, color);
+    if (fuzzy) {
+        bg_pixmap = create_fg_pixmap(conn, screen, resolution);
+    }
+    else {
+        bg_pixmap = create_bg_pixmap(conn, screen, resolution, color);
+    }
     /* Initialize cairo: Create one in-memory surface to render the unlock
      * indicator on, create one XCB surface to actually draw (one or more,
      * depending on the amount of screens) unlock indicators on. */
@@ -85,8 +92,20 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
     cairo_surface_t *xcb_output = cairo_xcb_surface_create(conn, bg_pixmap, vistype, resolution[0], resolution[1]);
     cairo_t *xcb_ctx = cairo_create(xcb_output);
 
-    if (img) {
-        if (!tile) {
+    if (img||fuzzy) {
+        if (fuzzy) {
+            cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
+
+            img=cairo_image_surface_create(CAIRO_FORMAT_ARGB32, last_resolution[0], last_resolution[1]);
+            cairo_t * cr = cairo_create(img);
+            cairo_set_source_surface(cr, tmp, 0, 0);
+            cairo_paint(cr);
+            cairo_destroy(cr);
+            cairo_surface_destroy(tmp);
+
+            blur_image_surface(img, last_resolution[0]>>1);
+        }
+        if (fuzzy || !tile) {
             cairo_set_source_surface(xcb_ctx, img, 0, 0);
             cairo_paint(xcb_ctx);
         } else {
