@@ -36,7 +36,7 @@
 #include "xinerama.h"
 
 /* We need this for libxkbfile */
-static Display *display;
+/*static*/ Display *display;
 char color[7] = "ffffff";
 uint32_t last_resolution[2];
 xcb_window_t win;
@@ -742,6 +742,8 @@ int main(int argc, char *argv[]) {
     xcb_change_window_attributes(conn, screen->root, XCB_CW_EVENT_MASK,
             (uint32_t[]){ XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 
+    glx_init(display, 0, last_resolution[0], last_resolution[1]);
+
     if (image_path && !fuzzy) {
         /* Create a pixmap to render on, fill it with the background color */
         img = cairo_image_surface_create_from_png(image_path);
@@ -781,6 +783,7 @@ int main(int argc, char *argv[]) {
     /* open the fullscreen window, already with the correct pixmap in place */
     win = open_fullscreen_window(conn, screen, color, bg_pixmap);
     xcb_free_pixmap(conn, bg_pixmap);
+    redraw_screen();
 
     pid_t pid = fork();
     /* The pid == -1 case is intentionally ignored here:

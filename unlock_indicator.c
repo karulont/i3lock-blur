@@ -13,10 +13,12 @@
 #include <ev.h>
 #include <cairo.h>
 #include <cairo/cairo-xcb.h>
+#include <X11/Xlib.h>
 
 #include "xcb.h"
 #include "unlock_indicator.h"
 #include "xinerama.h"
+#include "blur.h"
 
 #define BUTTON_RADIUS 90
 #define BUTTON_SPACE (BUTTON_RADIUS + 5)
@@ -52,6 +54,7 @@ extern bool tile;
 extern bool fuzzy;
 /* The background color to use (in hex). */
 extern char color[7];
+extern Display *display;
 
 /*******************************************************************************
  * Local variables.
@@ -94,6 +97,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
 
     if (img||fuzzy) {
         if (fuzzy) {
+            blur_image_gl(display, 0, bg_pixmap, last_resolution[0],last_resolution[1]);
             cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
 
             img=cairo_image_surface_create(CAIRO_FORMAT_ARGB32, last_resolution[0], last_resolution[1]);
@@ -103,7 +107,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
             cairo_destroy(cr);
             cairo_surface_destroy(tmp);
 
-            blur_image_surface(img, last_resolution[0]>>1);
+            //blur_image_surface(img, last_resolution[0]>>1);
         }
         if (fuzzy || !tile) {
             cairo_set_source_surface(xcb_ctx, img, 0, 0);

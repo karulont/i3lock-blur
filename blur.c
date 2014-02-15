@@ -23,6 +23,12 @@
 
 #include <math.h>
 #include <stdint.h>
+#define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+#include <GL/glx.h>
+#include <GL/glu.h>
+#include <GL/glext.h>
+#include <GL/glxext.h>
 
 #include "blur.h"
 
@@ -138,4 +144,198 @@ blur_image_surface (cairo_surface_t *surface, int radius)
 
     cairo_surface_destroy (tmp);
     cairo_surface_mark_dirty (surface);
+}
+
+void printShaderInfoLog(GLuint obj)
+{
+    int infologLength = 0;
+    int charsWritten  = 0;
+    char *infoLog;
+
+    glGetShaderiv(obj, GL_INFO_LOG_LENGTH,&infologLength);
+
+    if (infologLength > 0)
+    {
+        infoLog = (char *)malloc(infologLength);
+        glGetShaderInfoLog(obj, infologLength, &charsWritten, infoLog);
+    printf("shader_infolog: %s\n",infoLog);
+        free(infoLog);
+    }
+}
+
+void printProgramInfoLog(GLuint obj)
+{
+    int infologLength = 0;
+    int charsWritten  = 0;
+    char *infoLog;
+
+    glGetProgramiv(obj, GL_INFO_LOG_LENGTH,&infologLength);
+
+    if (infologLength > 0)
+    {
+        infoLog = (char *)malloc(infologLength);
+        glGetProgramInfoLog(obj, infologLength, &charsWritten, infoLog);
+    printf("program_infolog: %s\n",infoLog);
+        free(infoLog);
+    }
+}
+
+/* Variables for GL */
+static const char *VERT_SHADER =
+"varying vec2 v_Coordinates;\n"
+
+"void main(void) {\n"
+    "gl_Position = ftransform();\n"
+    "v_Coordinates = vec2(gl_MultiTexCoord0);\n"
+"}\n";
+static const char *FRAG_SHADER =
+"#version 130\n"
+"/////////////////////////////////////////////////\n"
+"// 7x1 gaussian blur fragment shader\n"
+"/////////////////////////////////////////////////\n"
+ 
+"varying vec2 v_Coordinates;\n"
+ 
+"uniform vec2 u_Scale;\n"
+"uniform sampler2D u_Texture0;\n"
+ 
+"const vec2 gaussFilter[7] = \n"
+"vec2[](\n"
+    "vec2 (-3.0,       0.015625),\n"
+    "vec2 (-2.0,       0.09375),\n"
+    "vec2 (-1.0,       0.234375),\n"
+    "vec2 (0.0,        0.3125),\n"
+    "vec2 (1.0,        0.234375),\n"
+    "vec2 (2.0,        0.09375),\n"
+    "vec2 (3.0,        0.015625)\n"
+");\n"
+
+"void main()\n"
+"{\n"
+    "vec4 color = vec4(0.0,0.0,0.0,0.0);\n"
+    "for( int i = 0; i < 7; i++ )\n"
+    "{\n"
+        "color += texture2D( u_Texture0, vec2( v_Coordinates.x+gaussFilter[i].x*u_Scale.x, v_Coordinates.y+gaussFilter[i].x*u_Scale.y ) )*gaussFilter[i].y;\n"
+    "}\n"
+    "gl_FragColor = color;\n"
+"}\n";
+
+GLXFBConfig *configs;
+GLXContext ctx;
+Pixmap tmp;
+GLXPixmap glx_tmp;
+GLXPixmap glx_pixmap;
+XVisualInfo *vis;
+GLuint shader_prog;
+GLuint v_shader;
+GLuint f_shader;
+static PFNGLXBINDTEXIMAGEEXTPROC glXBindTexImageEXT = NULL;
+static PFNGLXRELEASETEXIMAGEEXTPROC glXReleaseTexImageEXT = NULL;
+const int pixmap_config[] = {
+    GLX_BIND_TO_TEXTURE_RGBA_EXT, True,
+    GLX_DRAWABLE_TYPE, GLX_PIXMAP_BIT,
+    GLX_BIND_TO_TEXTURE_TARGETS_EXT, GLX_TEXTURE_2D_BIT_EXT,
+    GLX_DOUBLEBUFFER, False,
+    GLX_Y_INVERTED_EXT, GLX_DONT_CARE,
+    None
+};
+const int pixmap_attribs[] = {
+    GLX_TEXTURE_TARGET_EXT, GLX_TEXTURE_2D_EXT,
+    GLX_TEXTURE_FORMAT_EXT, GLX_TEXTURE_FORMAT_RGB_EXT,
+    None
+};
+
+void glx_init(Display *dpy, int scr, int w, int h) {
+    int attributes[] = {GLX_RGBA, GLX_DEPTH_SIZE, 24, None};
+    vis = glXChooseVisual(dpy, scr, attributes);
+    ctx = glXCreateContext(dpy, vis, NULL, True);
+
+    glXBindTexImageEXT = (PFNGLXBINDTEXIMAGEEXTPROC)
+        glXGetProcAddress((GLubyte *) "glXBindTexImageEXT"); 
+    glXReleaseTexImageEXT = (PFNGLXRELEASETEXIMAGEEXTPROC)
+        glXGetProcAddress((GLubyte *) "glXReleaseTexImageEXT"); 
+
+    tmp = XCreatePixmap(dpy, RootWindow(dpy, vis->screen), w, h, vis->depth);
+    glx_tmp = glXCreateGLXPixmap(dpy, vis, tmp);
+    
+    glXMakeCurrent(dpy, glx_tmp, ctx);
+    int i;
+    configs = glXChooseFBConfig(dpy, scr, pixmap_config, &i);
+#if 1
+    v_shader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(v_shader, 1, &VERT_SHADER, NULL);
+    glCompileShader(v_shader);
+    glGetShaderiv(v_shader, GL_COMPILE_STATUS, &i);
+    printf("V Shader: %d\n", i);
+    printShaderInfoLog(v_shader);
+    f_shader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(f_shader, 1, &FRAG_SHADER, NULL);
+    glCompileShader(f_shader);
+    glGetShaderiv(f_shader, GL_COMPILE_STATUS, &i);
+    printf("F Shader: %d\n", i);
+    printShaderInfoLog(f_shader);
+    shader_prog = glCreateProgram();
+    glAttachShader(shader_prog, v_shader);
+    glAttachShader(shader_prog, f_shader);
+    glLinkProgram(shader_prog);
+    glGetShaderiv(f_shader, GL_LINK_STATUS, &i);
+    printf("Program: %d\n", i);
+    printShaderInfoLog(f_shader);
+    printProgramInfoLog(shader_prog);
+#endif
+
+}
+
+void glx_deinit() {
+    glDetachShader(shader_prog, v_shader);
+    glDetachShader(shader_prog, f_shader);
+    glDeleteShader(v_shader);
+    glDeleteShader(f_shader);
+    glDeleteProgram(shader_prog);
+}
+
+void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) {
+    glx_pixmap = glXCreatePixmap(dpy, configs[0], pixmap, pixmap_attribs);
+
+    glEnable(GL_TEXTURE_2D);
+    GLuint tex_id;
+    glGenTextures(1, &tex_id);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glXBindTexImageEXT(dpy, glx_pixmap, GLX_FRONT_EXT, NULL);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL); 
+
+
+    glViewport(0, 0, (GLsizei) width, (GLsizei) height);
+    glClearColor(0.3, 0.3, 0.3, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(-1.0, 1.0, -1.0, 1.0, 1., 20.);
+
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    gluLookAt(0., 0., 10., 0., 0., 0., 0., 1., 0.);
+
+    glColor3f(0.0, 0.0, 1.0);
+    
+#if 1
+    glUseProgram(shader_prog);
+    GLint u_Scale = glGetUniformLocation(shader_prog, "u_Scale");
+    glUniform2f(u_Scale, 1.0 / width, 0);
+#endif
+
+    glBegin(GL_QUADS);
+#if 1
+    glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0, 0.0);
+    glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0, 0.0);
+    glTexCoord2f(1.0, 1.0); glVertex3f( 1.0, -1.0, 0.0);
+    glTexCoord2f(0.0, 1.0); glVertex3f(-1.0, -1.0, 0.0);
+#endif
+    glEnd(); 
+    glFlush();
+    GC gc = XCreateGC(dpy, pixmap, 0, NULL);
+    XCopyArea(dpy, tmp, pixmap, gc, 0, 0, width, height, 0, 0);
 }
