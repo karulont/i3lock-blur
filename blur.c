@@ -220,10 +220,12 @@ static const char *FRAG_SHADER =
     "gl_FragColor = color;\n"
 "}\n";
 
-GLXFBConfig *configs;
+GLXFBConfig *configs = NULL;
 GLXContext ctx;
 Pixmap tmp;
 GLXPixmap glx_tmp;
+Pixmap tmp1;
+GLXPixmap glx_tmp1;
 GLXPixmap glx_pixmap;
 XVisualInfo *vis;
 GLuint shader_prog;
@@ -246,8 +248,9 @@ const int pixmap_attribs[] = {
 };
 
 void glx_init(Display *dpy, int scr, int w, int h) {
-    int attributes[] = {GLX_RGBA, GLX_DEPTH_SIZE, 24, None};
-    vis = glXChooseVisual(dpy, scr, attributes);
+    int i;
+    configs = glXChooseFBConfig(dpy, scr, pixmap_config, &i);
+    vis = glXGetVisualFromFBConfig(dpy, configs[0]);
     ctx = glXCreateContext(dpy, vis, NULL, True);
 
     glXBindTexImageEXT = (PFNGLXBINDTEXIMAGEEXTPROC)
@@ -255,13 +258,14 @@ void glx_init(Display *dpy, int scr, int w, int h) {
     glXReleaseTexImageEXT = (PFNGLXRELEASETEXIMAGEEXTPROC)
         glXGetProcAddress((GLubyte *) "glXReleaseTexImageEXT"); 
 
+
     tmp = XCreatePixmap(dpy, RootWindow(dpy, vis->screen), w, h, vis->depth);
-    glx_tmp = glXCreateGLXPixmap(dpy, vis, tmp);
-    
+    glx_tmp = glXCreatePixmap(dpy, configs[0], tmp, pixmap_attribs);
     glXMakeCurrent(dpy, glx_tmp, ctx);
-    int i;
-    configs = glXChooseFBConfig(dpy, scr, pixmap_config, &i);
-#if 1
+
+    tmp1 = XCreatePixmap(dpy, RootWindow(dpy, vis->screen), w, h, vis->depth);
+    glx_tmp1 = glXCreatePixmap(dpy, configs[0], tmp1, pixmap_attribs);
+
     v_shader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(v_shader, 1, &VERT_SHADER, NULL);
     glCompileShader(v_shader);
@@ -282,7 +286,6 @@ void glx_init(Display *dpy, int scr, int w, int h) {
     printf("Program: %d\n", i);
     printShaderInfoLog(f_shader);
     printProgramInfoLog(shader_prog);
-#endif
 
 }
 
@@ -295,13 +298,29 @@ void glx_deinit() {
 }
 
 void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) {
+    if (configs == NULL ) {
+        glx_init(dpy, scr, width, height);
+    }
+
+
     glx_pixmap = glXCreatePixmap(dpy, configs[0], pixmap, pixmap_attribs);
 
+    for (uint8_t i=0;i<4;++i) {
+    if ((i & 1) == 0) {
+        glXMakeCurrent(dpy, glx_tmp, ctx);
+    }
+    else {
+        glXMakeCurrent(dpy, glx_tmp1, ctx);
+    }
     glEnable(GL_TEXTURE_2D);
-    GLuint tex_id;
-    glGenTextures(1, &tex_id);
-    glBindTexture(GL_TEXTURE_2D, tex_id);
-    glXBindTexImageEXT(dpy, glx_pixmap, GLX_FRONT_EXT, NULL);
+    //GLuint tex_id;
+    //glGenTextures(1, &tex_id);
+    //glBindTexture(GL_TEXTURE_2D, tex_id);
+    if (i==0) {
+        glXBindTexImageEXT(dpy, glx_pixmap, GLX_FRONT_EXT, NULL);
+    } else {
+        glXBindTexImageEXT(dpy, (i & 1) == 1 ? glx_tmp : glx_tmp1, GLX_FRONT_EXT, NULL);
+    }
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL); 
@@ -309,7 +328,7 @@ void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) 
 
     glViewport(0, 0, (GLsizei) width, (GLsizei) height);
     glClearColor(0.3, 0.3, 0.3, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -321,21 +340,23 @@ void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) 
 
     glColor3f(0.0, 0.0, 1.0);
     
-#if 1
     glUseProgram(shader_prog);
     GLint u_Scale = glGetUniformLocation(shader_prog, "u_Scale");
-    glUniform2f(u_Scale, 1.0 / width, 0);
-#endif
+    if ( i & 1 == 0) {
+        glUniform2f(u_Scale,  1.0 / width, 0);
+    }
+    else {
+        glUniform2f(u_Scale, 0, 1.0 / height);
+    }
 
     glBegin(GL_QUADS);
-#if 1
     glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0, 0.0);
     glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0, 0.0);
     glTexCoord2f(1.0, 1.0); glVertex3f( 1.0, -1.0, 0.0);
     glTexCoord2f(0.0, 1.0); glVertex3f(-1.0, -1.0, 0.0);
-#endif
     glEnd(); 
     glFlush();
+    }
     GC gc = XCreateGC(dpy, pixmap, 0, NULL);
-    XCopyArea(dpy, tmp, pixmap, gc, 0, 0, width, height, 0, 0);
+    XCopyArea(dpy, tmp1, pixmap, gc, 0, 0, width, height, 0, 0);
 }

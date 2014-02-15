@@ -742,8 +742,6 @@ int main(int argc, char *argv[]) {
     xcb_change_window_attributes(conn, screen->root, XCB_CW_EVENT_MASK,
             (uint32_t[]){ XCB_EVENT_MASK_STRUCTURE_NOTIFY });
 
-    glx_init(display, 0, last_resolution[0], last_resolution[1]);
-
     if (image_path && !fuzzy) {
         /* Create a pixmap to render on, fill it with the background color */
         img = cairo_image_surface_create_from_png(image_path);
@@ -755,35 +753,12 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (fuzzy) {
-        xcb_pixmap_t bg_pixmap = xcb_generate_id(conn);
-        xcb_create_pixmap(conn, screen->root_depth, bg_pixmap, screen->root,
-                      last_resolution[0], last_resolution[1]);
-
-        xcb_gcontext_t gc=xcb_generate_id(conn);
-        const uint32_t gc_values[] = {1};
-        xcb_create_gc(conn, gc, screen->root, XCB_GC_SUBWINDOW_MODE , gc_values);
-        xcb_copy_area(conn, screen->root, bg_pixmap, gc, 0, 0, 0, 0, last_resolution[0], last_resolution[1]);
-
-        cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
-        
-        img=cairo_image_surface_create(CAIRO_FORMAT_ARGB32, last_resolution[0], last_resolution[1]);
-        cairo_t * cr = cairo_create(img);
-        cairo_set_source_surface(cr, tmp, 0, 0);
-        cairo_paint(cr);
-        cairo_destroy(cr);
-        cairo_surface_destroy(tmp);
-
-        blur_image_surface(img, last_resolution[0]>>1);
-    }
-
     /* Pixmap on which the image is rendered to (if any) */
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
 
     /* open the fullscreen window, already with the correct pixmap in place */
     win = open_fullscreen_window(conn, screen, color, bg_pixmap);
     xcb_free_pixmap(conn, bg_pixmap);
-    redraw_screen();
 
     pid_t pid = fork();
     /* The pid == -1 case is intentionally ignored here:
