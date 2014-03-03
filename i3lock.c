@@ -14,6 +14,7 @@
 #include <stdint.h>
 #include <xcb/xcb.h>
 #include <xcb/dpms.h>
+#include <xcb/damage.h>
 #include <err.h>
 #include <assert.h>
 #include <security/pam_appl.h>
@@ -24,6 +25,7 @@
 #include <sys/mman.h>
 #include <X11/XKBlib.h>
 #include <X11/extensions/XKBfile.h>
+#include <X11/extensions/Xdamage.h>
 #include <xkbcommon/xkbcommon.h>
 #include <cairo.h>
 #include <cairo/cairo-xcb.h>
@@ -36,7 +38,7 @@
 #include "xinerama.h"
 
 /* We need this for libxkbfile */
-/*static*/ Display *display;
+Display *display;
 char color[7] = "ffffff";
 uint32_t last_resolution[2];
 xcb_window_t win;
@@ -58,6 +60,8 @@ extern pam_state_t pam_state;
 static struct xkb_state *xkb_state;
 static struct xkb_context *xkb_context;
 static struct xkb_keymap *xkb_keymap;
+
+static int damage_event;
 
 cairo_surface_t *img = NULL;
 bool tile = false;
@@ -473,6 +477,39 @@ static void xcb_prepare_cb(EV_P_ ev_prepare *w, int revents) {
 }
 
 /*
+ * This sets up the DAMAGE extentsion to receive damage events on all
+ * child windows
+ *
+ */
+static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* scr) {
+    int dmg_error;
+    XDamageQueryVersion(display, &damage_event, &dmg_error);
+    XDamageQueryExtension(display, &damage_event, &dmg_error);
+    //XDamageCreate(display, scr->root, XDamageReportNonEmpty);
+#if 1
+    xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
+                                    xcb_query_tree(conn,scr->root), NULL);
+    xcb_window_t *children = xcb_query_tree_children(reply);
+    for (int i=0;i < reply->children_len; ++i) {
+        /* Skip lock window */
+        if (children[i] == win)
+            continue;
+        /* Get attributes to check if input-only window */
+        xcb_get_window_attributes_reply_t *attribs = xcb_get_window_attributes_reply(conn, xcb_get_window_attributes(conn, children[i]), NULL);
+
+        if (attribs->_class == XCB_WINDOW_CLASS_INPUT_ONLY) {
+            free(attribs);
+            continue;
+        }
+        free(attribs);
+        XDamageCreate(display, children[i], XDamageReportNonEmpty);
+    }
+
+    free(reply);
+#endif
+}
+
+/*
  * Instead of polling the X connection socket we leave this to
  * xcb_poll_for_event() which knows better than we can ever know.
  *
@@ -488,6 +525,13 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
                         error->sequence, error->error_code);
             free(event);
             continue;
+        }
+
+        if (fuzzy && event->response_type == damage_event + XDamageNotify) {
+            xcb_damage_notify_event_t* ev = (xcb_damage_notify_event_t*) event;
+            fprintf(stderr, "XDamageNotify tim = 0x%x dam = 0x%x\n draw = 0x%x\n", ev->timestamp, ev->damage, ev->drawable);
+            XDamageSubtract(display, ev->damage, None, None);
+            redraw_screen();
         }
 
         /* Strip off the highest bit (set if the event is generated) */
@@ -757,8 +801,18 @@ int main(int argc, char *argv[]) {
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
 
     /* open the fullscreen window, already with the correct pixmap in place */
-    win = open_fullscreen_window(conn, screen, color, bg_pixmap);
+    if (fuzzy) {
+        win = open_overlay_window(conn, screen);
+    }
+    else {
+        win = open_fullscreen_window(conn, screen, color, bg_pixmap);
+    }
     xcb_free_pixmap(conn, bg_pixmap);
+
+    if (fuzzy) {
+        /* Set up damage notifications */
+        set_up_damage_notifications(conn, screen);
+    }
 
     pid_t pid = fork();
     /* The pid == -1 case is intentionally ignored here:

@@ -158,7 +158,7 @@ void printShaderInfoLog(GLuint obj)
     {
         infoLog = (char *)malloc(infologLength);
         glGetShaderInfoLog(obj, infologLength, &charsWritten, infoLog);
-    printf("shader_infolog: %s\n",infoLog);
+        //printf("shader_infolog: %s\n",infoLog);
         free(infoLog);
     }
 }
@@ -175,7 +175,7 @@ void printProgramInfoLog(GLuint obj)
     {
         infoLog = (char *)malloc(infologLength);
         glGetProgramInfoLog(obj, infologLength, &charsWritten, infoLog);
-    printf("program_infolog: %s\n",infoLog);
+        //printf("program_infolog: %s\n",infoLog);
         free(infoLog);
     }
 }
@@ -270,23 +270,22 @@ void glx_init(Display *dpy, int scr, int w, int h) {
     glShaderSource(v_shader, 1, &VERT_SHADER, NULL);
     glCompileShader(v_shader);
     glGetShaderiv(v_shader, GL_COMPILE_STATUS, &i);
-    printf("V Shader: %d\n", i);
+    //printf("V Shader: %d\n", i);
     printShaderInfoLog(v_shader);
     f_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(f_shader, 1, &FRAG_SHADER, NULL);
     glCompileShader(f_shader);
     glGetShaderiv(f_shader, GL_COMPILE_STATUS, &i);
-    printf("F Shader: %d\n", i);
+    //printf("F Shader: %d\n", i);
     printShaderInfoLog(f_shader);
     shader_prog = glCreateProgram();
     glAttachShader(shader_prog, v_shader);
     glAttachShader(shader_prog, f_shader);
     glLinkProgram(shader_prog);
     glGetShaderiv(f_shader, GL_LINK_STATUS, &i);
-    printf("Program: %d\n", i);
+    //printf("Program: %d\n", i);
     printShaderInfoLog(f_shader);
     printProgramInfoLog(shader_prog);
-
 }
 
 void glx_deinit() {
@@ -313,9 +312,6 @@ void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) 
         glXMakeCurrent(dpy, glx_tmp1, ctx);
     }
     glEnable(GL_TEXTURE_2D);
-    //GLuint tex_id;
-    //glGenTextures(1, &tex_id);
-    //glBindTexture(GL_TEXTURE_2D, tex_id);
     if (i==0) {
         glXBindTexImageEXT(dpy, glx_pixmap, GLX_FRONT_EXT, NULL);
     } else {
@@ -359,4 +355,6 @@ void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) 
     }
     GC gc = XCreateGC(dpy, pixmap, 0, NULL);
     XCopyArea(dpy, tmp1, pixmap, gc, 0, 0, width, height, 0, 0);
+    XFreeGC(dpy, gc);
+    glXDestroyPixmap(dpy, glx_pixmap);
 }

@@ -55,7 +55,6 @@ extern bool fuzzy;
 /* The background color to use (in hex). */
 extern char color[7];
 extern Display *display;
-
 /*******************************************************************************
  * Local variables.
  ******************************************************************************/
@@ -99,17 +98,11 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
         if (fuzzy) {
             blur_image_gl(display, 0, bg_pixmap, last_resolution[0],last_resolution[1]);
             cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
-
-            img=cairo_image_surface_create(CAIRO_FORMAT_ARGB32, last_resolution[0], last_resolution[1]);
-            cairo_t * cr = cairo_create(img);
-            cairo_set_source_surface(cr, tmp, 0, 0);
-            cairo_paint(cr);
-            cairo_destroy(cr);
+            cairo_set_source_surface(xcb_ctx, tmp, 0, 0);
+            cairo_paint(xcb_ctx);
             cairo_surface_destroy(tmp);
-
-            //blur_image_surface(img, last_resolution[0]>>1);
         }
-        if (fuzzy || !tile) {
+        else if (!tile) {
             cairo_set_source_surface(xcb_ctx, img, 0, 0);
             cairo_paint(xcb_ctx);
         } else {
