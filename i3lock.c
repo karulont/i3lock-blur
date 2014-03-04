@@ -184,7 +184,7 @@ static void clear_pam_wrong(EV_P_ ev_timer *w, int revents) {
     DEBUG("clearing pam wrong\n");
     pam_state = STATE_PAM_IDLE;
     unlock_state = STATE_STARTED;
-    redraw_screen();
+    redraw_unlock_indicator();
 
     /* Now free this timeout. */
     ev_timer_stop(main_loop, clear_pam_wrong_timeout);
@@ -201,7 +201,7 @@ static void clear_input(void) {
      * empty. */
     start_clear_indicator_timeout();
     unlock_state = STATE_BACKSPACE_ACTIVE;
-    redraw_screen();
+    redraw_unlock_indicator();
     unlock_state = STATE_KEY_PRESSED;
 }
 
@@ -213,7 +213,7 @@ static void input_done(void) {
     }
 
     pam_state = STATE_PAM_VERIFY;
-    redraw_screen();
+    redraw_unlock_indicator();
 
     if (pam_authenticate(pam_handle, 0) == PAM_SUCCESS) {
         DEBUG("successfully authenticated\n");
@@ -230,7 +230,7 @@ static void input_done(void) {
 
     pam_state = STATE_PAM_WRONG;
     clear_input();
-    redraw_screen();
+    redraw_unlock_indicator();
 
     /* Clear this state after 2 seconds (unless the user enters another
      * password during that time). */
@@ -261,7 +261,7 @@ static void handle_key_release(xcb_key_release_event_t *event) {
 }
 
 static void redraw_timeout(EV_P_ ev_timer *w, int revents) {
-    redraw_screen();
+    redraw_unlock_indicator();
 
     ev_timer_stop(main_loop, w);
     free(w);
@@ -297,7 +297,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
         }
         password[input_position] = '\0';
         unlock_state = STATE_KEY_PRESSED;
-        redraw_screen();
+        redraw_unlock_indicator();
         input_done();
         return;
 
@@ -325,7 +325,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
          * empty. */
         start_clear_indicator_timeout();
         unlock_state = STATE_BACKSPACE_ACTIVE;
-        redraw_screen();
+        redraw_unlock_indicator();
         unlock_state = STATE_KEY_PRESSED;
         return;
     }
@@ -353,7 +353,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
     DEBUG("current password = %.*s\n", input_position, password);
 
     unlock_state = STATE_KEY_ACTIVE;
-    redraw_screen();
+    redraw_unlock_indicator();
     unlock_state = STATE_KEY_PRESSED;
 
     struct ev_timer *timeout = calloc(sizeof(struct ev_timer), 1);

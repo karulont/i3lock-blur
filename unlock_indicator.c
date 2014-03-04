@@ -69,63 +69,16 @@ static xcb_visualtype_t *vistype;
 unlock_state_t unlock_state;
 pam_state_t pam_state;
 
-/*
- * Draws global image with fill color onto a pixmap with the given
- * resolution and returns it.
- *
- */
-xcb_pixmap_t draw_image(uint32_t *resolution) {
-    xcb_pixmap_t bg_pixmap = XCB_NONE;
+/* A surface for the unlock indicator */
+static cairo_surface_t *unlock_indicator_surface = NULL;
 
-    if (!vistype)
-        vistype = get_root_visual_type(screen);
-    if (fuzzy) {
-        bg_pixmap = create_fg_pixmap(conn, screen, resolution);
+static void draw_unlock_indicator() {
+    /* Initialise the surface if not yet done */
+    if (unlock_indicator_surface == NULL) {
+        unlock_indicator_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, BUTTON_DIAMETER, BUTTON_DIAMETER);
     }
-    else {
-        bg_pixmap = create_bg_pixmap(conn, screen, resolution, color);
-    }
-    /* Initialize cairo: Create one in-memory surface to render the unlock
-     * indicator on, create one XCB surface to actually draw (one or more,
-     * depending on the amount of screens) unlock indicators on. */
-    cairo_surface_t *output = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, BUTTON_DIAMETER, BUTTON_DIAMETER);
-    cairo_t *ctx = cairo_create(output);
 
-    cairo_surface_t *xcb_output = cairo_xcb_surface_create(conn, bg_pixmap, vistype, resolution[0], resolution[1]);
-    cairo_t *xcb_ctx = cairo_create(xcb_output);
-
-    if (img||fuzzy) {
-        if (fuzzy) {
-            blur_image_gl(display, 0, bg_pixmap, last_resolution[0],last_resolution[1]);
-            cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
-            cairo_set_source_surface(xcb_ctx, tmp, 0, 0);
-            cairo_paint(xcb_ctx);
-            cairo_surface_destroy(tmp);
-        }
-        else if (!tile) {
-            cairo_set_source_surface(xcb_ctx, img, 0, 0);
-            cairo_paint(xcb_ctx);
-        } else {
-            /* create a pattern and fill a rectangle as big as the screen */
-            cairo_pattern_t *pattern;
-            pattern = cairo_pattern_create_for_surface(img);
-            cairo_set_source(xcb_ctx, pattern);
-            cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
-            cairo_rectangle(xcb_ctx, 0, 0, resolution[0], resolution[1]);
-            cairo_fill(xcb_ctx);
-            cairo_pattern_destroy(pattern);
-        }
-    } else {
-        char strgroups[3][3] = {{color[0], color[1], '\0'},
-                                {color[2], color[3], '\0'},
-                                {color[4], color[5], '\0'}};
-        uint32_t rgb16[3] = {(strtol(strgroups[0], NULL, 16)),
-                             (strtol(strgroups[1], NULL, 16)),
-                             (strtol(strgroups[2], NULL, 16))};
-        cairo_set_source_rgb(xcb_ctx, rgb16[0] / 255.0, rgb16[1] / 255.0, rgb16[2] / 255.0);
-        cairo_rectangle(xcb_ctx, 0, 0, resolution[0], resolution[1]);
-        cairo_fill(xcb_ctx);
-    }
+    cairo_t *ctx = cairo_create(unlock_indicator_surface);
 
     if (unlock_state >= STATE_KEY_PRESSED && unlock_indicator) {
         /* Draw a (centered) circle with transparent background. */
@@ -249,12 +202,72 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
         }
     }
 
+    cairo_destroy(ctx);
+}
+
+/*
+ * Draws global image with fill color onto a pixmap with the given
+ * resolution and returns it.
+ *
+ */
+xcb_pixmap_t draw_image(uint32_t *resolution) {
+    xcb_pixmap_t bg_pixmap = XCB_NONE;
+
+    if (!vistype)
+        vistype = get_root_visual_type(screen);
+    if (fuzzy) {
+        bg_pixmap = create_fg_pixmap(conn, screen, resolution);
+    }
+    else {
+        bg_pixmap = create_bg_pixmap(conn, screen, resolution, color);
+    }
+    /* Initialize cairo: Create one in-memory surface to render the unlock
+     * indicator on, create one XCB surface to actually draw (one or more,
+     * depending on the amount of screens) unlock indicators on. */
+
+    cairo_surface_t *xcb_output = cairo_xcb_surface_create(conn, bg_pixmap, vistype, resolution[0], resolution[1]);
+    cairo_t *xcb_ctx = cairo_create(xcb_output);
+
+    if (img||fuzzy) {
+        if (fuzzy) {
+            blur_image_gl(display, 0, bg_pixmap, last_resolution[0],last_resolution[1]);
+            cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
+            cairo_set_source_surface(xcb_ctx, tmp, 0, 0);
+            cairo_paint(xcb_ctx);
+            cairo_surface_destroy(tmp);
+        }
+        else if (!tile) {
+            cairo_set_source_surface(xcb_ctx, img, 0, 0);
+            cairo_paint(xcb_ctx);
+        } else {
+            /* create a pattern and fill a rectangle as big as the screen */
+            cairo_pattern_t *pattern;
+            pattern = cairo_pattern_create_for_surface(img);
+            cairo_set_source(xcb_ctx, pattern);
+            cairo_pattern_set_extend(pattern, CAIRO_EXTEND_REPEAT);
+            cairo_rectangle(xcb_ctx, 0, 0, resolution[0], resolution[1]);
+            cairo_fill(xcb_ctx);
+            cairo_pattern_destroy(pattern);
+        }
+    } else {
+        char strgroups[3][3] = {{color[0], color[1], '\0'},
+                                {color[2], color[3], '\0'},
+                                {color[4], color[5], '\0'}};
+        uint32_t rgb16[3] = {(strtol(strgroups[0], NULL, 16)),
+                             (strtol(strgroups[1], NULL, 16)),
+                             (strtol(strgroups[2], NULL, 16))};
+        cairo_set_source_rgb(xcb_ctx, rgb16[0] / 255.0, rgb16[1] / 255.0, rgb16[2] / 255.0);
+        cairo_rectangle(xcb_ctx, 0, 0, resolution[0], resolution[1]);
+        cairo_fill(xcb_ctx);
+    }
+
+
     if (xr_screens > 0) {
         /* Composite the unlock indicator in the middle of each screen. */
         for (int screen = 0; screen < xr_screens; screen++) {
             int x = (xr_resolutions[screen].x + ((xr_resolutions[screen].width / 2) - (BUTTON_DIAMETER / 2)));
             int y = (xr_resolutions[screen].y + ((xr_resolutions[screen].height / 2) - (BUTTON_DIAMETER / 2)));
-            cairo_set_source_surface(xcb_ctx, output, x, y);
+            cairo_set_source_surface(xcb_ctx, unlock_indicator_surface, x, y);
             cairo_rectangle(xcb_ctx, x, y, BUTTON_DIAMETER, BUTTON_DIAMETER);
             cairo_fill(xcb_ctx);
         }
@@ -264,14 +277,12 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
          * hope for the best. */
         int x = (last_resolution[0] / 2) - (BUTTON_DIAMETER / 2);
         int y = (last_resolution[1] / 2) - (BUTTON_DIAMETER / 2);
-        cairo_set_source_surface(xcb_ctx, output, x, y);
+        cairo_set_source_surface(xcb_ctx, unlock_indicator_surface, x, y);
         cairo_rectangle(xcb_ctx, x, y, BUTTON_DIAMETER, BUTTON_DIAMETER);
         cairo_fill(xcb_ctx);
     }
 
     cairo_surface_destroy(xcb_output);
-    cairo_surface_destroy(output);
-    cairo_destroy(ctx);
     cairo_destroy(xcb_ctx);
     return bg_pixmap;
 }
@@ -290,6 +301,15 @@ void redraw_screen(void) {
     xcb_flush(conn);
 }
 
+/* 
+ * Redraws screen and also redraws unlock indicator
+ *
+ */
+void redraw_unlock_indicator(void) {
+    draw_unlock_indicator();
+    redraw_screen();
+}
+
 /*
  * Hides the unlock indicator completely when there is no content in the
  * password buffer.
@@ -299,7 +319,7 @@ static void clear_indicator(EV_P_ ev_timer *w, int revents) {
     if (input_position == 0) {
         unlock_state = STATE_STARTED;
     } else unlock_state = STATE_KEY_PRESSED;
-    redraw_screen();
+    redraw_unlock_indicator();
 
     ev_timer_stop(main_loop, clear_indicator_timeout);
     free(clear_indicator_timeout);
