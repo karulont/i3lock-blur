@@ -79,6 +79,11 @@ static void draw_unlock_indicator() {
     }
 
     cairo_t *ctx = cairo_create(unlock_indicator_surface);
+    /* clear the surface */
+    cairo_save(ctx);
+    cairo_set_operator(ctx, CAIRO_OPERATOR_CLEAR);
+    cairo_paint(ctx);
+    cairo_restore(ctx);
 
     if (unlock_state >= STATE_KEY_PRESSED && unlock_indicator) {
         /* Draw a (centered) circle with transparent background. */
