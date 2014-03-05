@@ -146,6 +146,7 @@ blur_image_surface (cairo_surface_t *surface, int radius)
     cairo_surface_mark_dirty (surface);
 }
 
+#if DEBUG_GL
 void printShaderInfoLog(GLuint obj)
 {
     int infologLength = 0;
@@ -158,7 +159,7 @@ void printShaderInfoLog(GLuint obj)
     {
         infoLog = (char *)malloc(infologLength);
         glGetShaderInfoLog(obj, infologLength, &charsWritten, infoLog);
-        //printf("shader_infolog: %s\n",infoLog);
+        printf("shader_infolog: %s\n",infoLog);
         free(infoLog);
     }
 }
@@ -175,10 +176,11 @@ void printProgramInfoLog(GLuint obj)
     {
         infoLog = (char *)malloc(infologLength);
         glGetProgramInfoLog(obj, infologLength, &charsWritten, infoLog);
-        //printf("program_infolog: %s\n",infoLog);
+        printf("program_infolog: %s\n",infoLog);
         free(infoLog);
     }
 }
+#endif
 
 /* Variables for GL */
 static const char *VERT_SHADER =
@@ -270,22 +272,28 @@ void glx_init(Display *dpy, int scr, int w, int h) {
     glShaderSource(v_shader, 1, &VERT_SHADER, NULL);
     glCompileShader(v_shader);
     glGetShaderiv(v_shader, GL_COMPILE_STATUS, &i);
-    //printf("V Shader: %d\n", i);
+#if DEBUG_GL
+    printf("V Shader: %d\n", i);
     printShaderInfoLog(v_shader);
+#endif
     f_shader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(f_shader, 1, &FRAG_SHADER, NULL);
     glCompileShader(f_shader);
     glGetShaderiv(f_shader, GL_COMPILE_STATUS, &i);
-    //printf("F Shader: %d\n", i);
+#if DEBUG_GL
+    printf("F Shader: %d\n", i);
     printShaderInfoLog(f_shader);
+#endif
     shader_prog = glCreateProgram();
     glAttachShader(shader_prog, v_shader);
     glAttachShader(shader_prog, f_shader);
     glLinkProgram(shader_prog);
     glGetShaderiv(f_shader, GL_LINK_STATUS, &i);
-    //printf("Program: %d\n", i);
+#if DEBUG_GL
+    printf("Program: %d\n", i);
     printShaderInfoLog(f_shader);
     printProgramInfoLog(shader_prog);
+#endif
 }
 
 void glx_deinit() {
@@ -338,7 +346,7 @@ void blur_image_gl(Display *dpy, int scr, Pixmap pixmap, int width, int height) 
     
     glUseProgram(shader_prog);
     GLint u_Scale = glGetUniformLocation(shader_prog, "u_Scale");
-    if ( i & 1 == 0) {
+    if ( (i & 1) == 0) {
         glUniform2f(u_Scale,  1.0 / width, 0);
     }
     else {
