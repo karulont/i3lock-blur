@@ -485,8 +485,6 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
     int dmg_error;
     XDamageQueryVersion(display, &damage_event, &dmg_error);
     XDamageQueryExtension(display, &damage_event, &dmg_error);
-    //XDamageCreate(display, scr->root, XDamageReportNonEmpty);
-#if 1
     xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
                                     xcb_query_tree(conn,scr->root), NULL);
     xcb_window_t *children = xcb_query_tree_children(reply);
@@ -506,7 +504,6 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
     }
 
     free(reply);
-#endif
 }
 
 /*
@@ -529,7 +526,6 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
 
         if (fuzzy && event->response_type == damage_event + XDamageNotify) {
             xcb_damage_notify_event_t* ev = (xcb_damage_notify_event_t*) event;
-            fprintf(stderr, "XDamageNotify tim = 0x%x dam = 0x%x\n draw = 0x%x\n", ev->timestamp, ev->damage, ev->drawable);
             XDamageSubtract(display, ev->damage, None, None);
             redraw_screen();
         }
