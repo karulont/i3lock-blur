@@ -518,8 +518,9 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
         if (event->response_type == 0) {
             xcb_generic_error_t *error = (xcb_generic_error_t*)event;
             if (debug_mode)
-                fprintf(stderr, "X11 Error received! sequence 0x%x, error_code = %d\n",
-                        error->sequence, error->error_code);
+                fprintf(stderr, "X11 Error received! sequence 0x%x, error_code = %d, major = 0x%x, minor = 0x%x\n",
+                        error->sequence, error->error_code, error->major_code,
+                        error->minor_code);
             free(event);
             continue;
         }
