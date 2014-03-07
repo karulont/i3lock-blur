@@ -294,6 +294,21 @@ void glx_init(Display *dpy, int scr, int w, int h) {
 #endif
 }
 
+void glx_resize(Display *dpy, int w, int h) {
+    /* free old pixmaps */
+    glXDestroyPixmap(dpy, glx_tmp);
+    glXDestroyPixmap(dpy, glx_tmp1);
+    XFreePixmap(dpy, tmp);
+    XFreePixmap(dpy, tmp1);
+
+    /* create new pixmaps */
+    tmp = XCreatePixmap(dpy, RootWindow(dpy, vis->screen), w, h, vis->depth);
+    glx_tmp = glXCreatePixmap(dpy, configs[0], tmp, pixmap_attribs);
+    glXMakeCurrent(dpy, glx_tmp, ctx);
+    tmp1 = XCreatePixmap(dpy, RootWindow(dpy, vis->screen), w, h, vis->depth);
+    glx_tmp1 = glXCreatePixmap(dpy, configs[0], tmp1, pixmap_attribs);
+}
+
 void glx_deinit() {
     glDetachShader(shader_prog, v_shader);
     glDetachShader(shader_prog, f_shader);

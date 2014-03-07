@@ -417,6 +417,8 @@ void handle_screen_resize(void) {
 
     free(geom);
 
+    glx_resize(display, last_resolution[0], last_resolution[1]);
+
     redraw_screen();
 
     uint32_t mask = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
