@@ -383,6 +383,23 @@ static void handle_visibility_notify(xcb_connection_t *conn,
     }
 }
 
+static void handle_map_notify(xcb_map_notify_event_t *event) {
+    if (fuzzy) {
+        /* Create damage objects for new windows */
+        XDamageCreate(display, event->window, XDamageReportNonEmpty);
+    }
+    if (!dont_fork) {
+        /* After the first MapNotify, we never fork again. */
+        dont_fork = true;
+
+        /* In the parent process, we exit */
+        if (fork() != 0)
+            exit(0);
+
+        ev_loop_fork(EV_DEFAULT);
+    }
+}
+
 /*
  * Called when the keyboard mapping changes. We update our symbols.
  *
@@ -555,17 +572,7 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
                 break;
 
             case XCB_MAP_NOTIFY:
-                if (!dont_fork) {
-                    /* After the first MapNotify, we never fork again. We don’t
-                     * expect to get another MapNotify, but better be sure… */
-                    dont_fork = true;
-
-                    /* In the parent process, we exit */
-                    if (fork() != 0)
-                        exit(0);
-
-                    ev_loop_fork(EV_DEFAULT);
-                }
+                handle_map_notify((xcb_map_notify_event_t*) event);
                 break;
 
             case XCB_MAPPING_NOTIFY:

@@ -153,6 +153,9 @@ xcb_window_t open_overlay_window(xcb_connection_t *conn, xcb_screen_t *scr) {
     xcb_composite_redirect_subwindows(conn, scr->root, 
             XCB_COMPOSITE_REDIRECT_AUTOMATIC);
 
+    xcb_change_window_attributes(conn, scr->root, XCB_CW_EVENT_MASK,
+            (uint32_t [1]){XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY});
+
     return win;
 }
 
