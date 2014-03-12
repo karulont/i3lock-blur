@@ -50,6 +50,7 @@ static char password[512];
 static bool beep = false;
 bool debug_mode = false;
 static bool dpms = false;
+bool dpms_capable = false;
 bool unlock_indicator = true;
 static bool dont_fork = false;
 struct ev_loop *main_loop;
@@ -770,18 +771,17 @@ int main(int argc, char *argv[]) {
     xinerama_init();
     xinerama_query_screens();
 
-    /* if DPMS is enabled, check if the X server really supports it */
-    if (dpms) {
-        xcb_dpms_capable_cookie_t dpmsc = xcb_dpms_capable(conn);
-        xcb_dpms_capable_reply_t *dpmsr;
-        if ((dpmsr = xcb_dpms_capable_reply(conn, dpmsc, NULL))) {
-            if (!dpmsr->capable) {
-                if (debug_mode)
-                    fprintf(stderr, "Disabling DPMS, X server not DPMS capable\n");
-                dpms = false;
-            }
-            free(dpmsr);
+    /* check if the X server supports DPMS */
+    xcb_dpms_capable_cookie_t dpmsc = xcb_dpms_capable(conn);
+    xcb_dpms_capable_reply_t *dpmsr;
+    if ((dpmsr = xcb_dpms_capable_reply(conn, dpmsc, NULL))) {
+        dpms_capable = dpmsr->capable;
+        if (!dpmsr->capable && dpms) {
+            if (debug_mode)
+                fprintf(stderr, "Disabling DPMS, X server not DPMS capable\n");
+            dpms = false;
         }
+        free(dpmsr);
     }
 
     screen = xcb_setup_roots_iterator(xcb_get_setup(conn)).data;

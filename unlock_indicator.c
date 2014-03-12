@@ -47,7 +47,7 @@ extern bool unlock_indicator;
 
 /* A Cairo surface containing the specified image (-i), if any. */
 extern cairo_surface_t *img;
-
+extern bool dpms_capable;
 /* Whether the image should be tiled. */
 extern bool tile;
 /* Whether to use fuzzy mode. */
@@ -297,6 +297,22 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
  *
  */
 void redraw_screen(void) {
+
+    /* avoid drawing if monitor state is not on */
+    if (dpms_capable) {
+        xcb_dpms_info_reply_t *dpms_info =
+            xcb_dpms_info_reply(conn,xcb_dpms_info(conn), NULL);
+        if (dpms_info) {
+            /* monitor is off when DPMS state is enabled and power level is not
+             * DPMS_MODE_ON */
+            uint8_t monitor_off = dpms_info->state
+                && dpms_info->power_level != XCB_DPMS_DPMS_MODE_ON;
+            free(dpms_info);
+            if (monitor_off)
+                return;
+        }
+    }
+
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
     xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXMAP, (uint32_t[1]){ bg_pixmap });
     /* XXX: Possible optimization: Only update the area in the middle of the
