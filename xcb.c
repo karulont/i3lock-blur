@@ -143,12 +143,15 @@ xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
 
 xcb_window_t open_overlay_window(xcb_connection_t *conn, xcb_screen_t *scr) {
 
-    xcb_composite_query_version_reply(conn,xcb_composite_query_version(conn, XCB_COMPOSITE_MAJOR_VERSION, XCB_COMPOSITE_MINOR_VERSION), NULL);
+    xcb_composite_query_version_reply_t * ver_reply =
+        xcb_composite_query_version_reply(conn,xcb_composite_query_version(conn, XCB_COMPOSITE_MAJOR_VERSION, XCB_COMPOSITE_MINOR_VERSION), NULL);
     xcb_composite_get_overlay_window_reply_t *comp_win_reply = 
         xcb_composite_get_overlay_window_reply(conn, 
                 xcb_composite_get_overlay_window(conn, scr->root), NULL);
 
     xcb_window_t win = comp_win_reply->overlay_win;
+    free(ver_reply);
+    free(comp_win_reply);
 
     xcb_composite_redirect_subwindows(conn, scr->root, 
             XCB_COMPOSITE_REDIRECT_AUTOMATIC);

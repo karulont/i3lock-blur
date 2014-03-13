@@ -235,7 +235,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
 
     if (img||fuzzy) {
         if (fuzzy) {
-            blur_image_gl(display, 0, bg_pixmap, last_resolution[0],last_resolution[1]);
+            blur_image_gl(0, bg_pixmap, last_resolution[0],last_resolution[1]);
             cairo_surface_t * tmp = cairo_xcb_surface_create(conn, bg_pixmap, get_root_visual_type(screen), last_resolution[0], last_resolution[1]);
             cairo_set_source_surface(xcb_ctx, tmp, 0, 0);
             cairo_paint(xcb_ctx);
