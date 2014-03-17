@@ -105,6 +105,11 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
         /* Get attributes to check if input-only window */
         xcb_get_window_attributes_reply_t *attribs = xcb_get_window_attributes_reply(conn, xcb_get_window_attributes(conn, children[i]), NULL);
 
+        /* If attributes are NULL then the window was destroyed */
+        if (!attribs) {
+            continue;
+        }
+
         if (attribs->_class == XCB_WINDOW_CLASS_INPUT_ONLY) {
             free(attribs);
             continue;

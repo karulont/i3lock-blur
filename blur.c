@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <GL/glx.h>
@@ -156,7 +155,6 @@ void glx_init(int scr, int w, int h) {
     printShaderInfoLog(f_shader);
     printProgramInfoLog(shader_prog);
 #endif
-    atexit(glx_deinit);
 }
 
 static void glx_free_pixmaps(void) {

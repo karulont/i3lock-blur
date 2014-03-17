@@ -25,7 +25,6 @@
 #include <sys/mman.h>
 #include <X11/XKBlib.h>
 #include <X11/extensions/XKBfile.h>
-#include <X11/extensions/Xdamage.h>
 #include <xkbcommon/xkbcommon.h>
 #include <cairo.h>
 #include <cairo/cairo-xcb.h>
@@ -62,7 +61,7 @@ static struct xkb_state *xkb_state;
 static struct xkb_context *xkb_context;
 static struct xkb_keymap *xkb_keymap;
 
-static int damage_event;
+const xcb_query_extension_reply_t *dam_ext_data;
 
 cairo_surface_t *img = NULL;
 bool tile = false;
@@ -387,7 +386,8 @@ static void handle_visibility_notify(xcb_connection_t *conn,
 static void handle_map_notify(xcb_map_notify_event_t *event) {
     if (fuzzy) {
         /* Create damage objects for new windows */
-        XDamageCreate(display, event->window, XDamageReportNonEmpty);
+        xcb_damage_damage_t dam = xcb_generate_id(conn);
+        xcb_damage_create(conn, dam, event->window, XCB_DAMAGE_REPORT_LEVEL_NON_EMPTY);
     }
     if (!dont_fork) {
         /* After the first MapNotify, we never fork again. */
@@ -502,9 +502,10 @@ static void xcb_prepare_cb(EV_P_ ev_prepare *w, int revents) {
  *
  */
 static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* scr) {
-    int dmg_error;
-    XDamageQueryVersion(display, &damage_event, &dmg_error);
-    XDamageQueryExtension(display, &damage_event, &dmg_error);
+    xcb_damage_query_version_unchecked(conn, XCB_DAMAGE_MAJOR_VERSION, XCB_DAMAGE_MINOR_VERSION);
+
+    dam_ext_data = xcb_get_extension_data(conn, &xcb_damage_id);
+
     xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
                                     xcb_query_tree(conn,scr->root), NULL);
     xcb_window_t *children = xcb_query_tree_children(reply);
@@ -520,7 +521,8 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
             continue;
         }
         free(attribs);
-        XDamageCreate(display, children[i], XDamageReportNonEmpty);
+        xcb_damage_damage_t dam = xcb_generate_id(conn);
+        xcb_damage_create(conn, dam, children[i], XCB_DAMAGE_REPORT_LEVEL_NON_EMPTY);
     }
 
     free(reply);
@@ -537,6 +539,16 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
     while ((event = xcb_poll_for_event(conn)) != NULL) {
         if (event->response_type == 0) {
             xcb_generic_error_t *error = (xcb_generic_error_t*)event;
+
+            /* Ignore errors when damage report is about destroyed window
+             * or damage object is created for already destroyed window */
+            if (error->major_code == dam_ext_data->major_opcode
+                    && (error->minor_code == XCB_DAMAGE_SUBTRACT 
+                    || error->minor_code == XCB_DAMAGE_CREATE)){
+                free(event);
+                continue;
+            }
+
             if (debug_mode)
                 fprintf(stderr, "X11 Error received! sequence 0x%x, error_code = %d, major = 0x%x, minor = 0x%x\n",
                         error->sequence, error->error_code, error->major_code,
@@ -545,9 +557,9 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
             continue;
         }
 
-        if (fuzzy && event->response_type == damage_event + XDamageNotify) {
+        if (fuzzy && event->response_type == dam_ext_data->first_event + XCB_DAMAGE_NOTIFY) {
             xcb_damage_notify_event_t* ev = (xcb_damage_notify_event_t*) event;
-            XDamageSubtract(display, ev->damage, None, None);
+            xcb_damage_subtract(conn, ev->damage, XCB_NONE, XCB_NONE);
             redraw_screen();
         }
 
@@ -819,18 +831,18 @@ int main(int argc, char *argv[]) {
         /* Set up damage notifications */
         set_up_damage_notifications(conn, screen);
     }
-
-    pid_t pid = fork();
-    /* The pid == -1 case is intentionally ignored here:
-     * While the child process is useful for preventing other windows from
-     * popping up while i3lock blocks, it is not critical. */
-    if (pid == 0) {
-        /* Child */
-        close(xcb_get_file_descriptor(conn));
-        raise_loop(win);
-        exit(EXIT_SUCCESS);
+    else {
+        pid_t pid = fork();
+        /* The pid == -1 case is intentionally ignored here:
+         * While the child process is useful for preventing other windows from
+         * popping up while i3lock blocks, it is not critical. */
+        if (pid == 0) {
+            /* Child */
+            close(xcb_get_file_descriptor(conn));
+            raise_loop(win);
+            exit(EXIT_SUCCESS);
+        }
     }
-
     cursor = create_cursor(conn, screen, win, curs_choice);
 
     grab_pointer_and_keyboard(conn, screen, cursor);
