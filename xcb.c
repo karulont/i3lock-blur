@@ -106,6 +106,10 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
     xcb_get_geometry_cookie_t *geos = (xcb_get_geometry_cookie_t*)
         malloc(sizeof(xcb_get_geometry_cookie_t)*reply->children_len);
 
+    if (!attribs || !geos) {
+        goto END;
+    }
+
     for (int i=0;i < reply->children_len; ++i) {
         /* Get attributes to check if input-only window */
         attribs[i] = xcb_get_window_attributes(conn, children[i]);
@@ -135,6 +139,7 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
     }
     free(geos);
     free(attribs);
+END:
     free(reply);
 
     xcb_free_gc(conn, gc);
