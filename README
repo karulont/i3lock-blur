@@ -6,6 +6,9 @@ to your screen by entering your password.
 
 Many little improvements have been made to i3lock over time:
 
+- Fuzzy option added. With that there is no image or solid color displayed
+  when screen is locked. A blurring filter is applied to the screen.
+
 - i3lock forks, so you can combine it with an alias to suspend to RAM
   (run "i3lock && echo mem > /sys/power/state" to get a locked screen
    after waking up your computer from suspend to RAM)
@@ -30,6 +33,7 @@ Requirements
 - libx11-xcb-dev
 - libxkbfile-dev
 - libxkbcommon >= 0.2.0
+- libGL
 
 Running i3lock
 -------------

@@ -760,7 +760,7 @@ int main(int argc, char *argv[]) {
             break;
         default:
             errx(1, "Syntax: i3lock [-v] [-n] [-b] [-d] [-c color] [-u] [-p win|default]"
-            " [-i image.png] [-t] [-e]"
+            " [-i image.png] [-t] [-f] [-e]"
             );
         }
     }

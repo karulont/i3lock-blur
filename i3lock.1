@@ -24,6 +24,7 @@ i3lock \- improved screen locker
 .RB [\|\-c
 .IR color \|]
 .RB [\|\-t\|]
+.RB [\|\-f\|]
 .RB [\|\-p
 .IR pointer\|]
 .RB [\|\-u\|]
@@ -37,7 +38,10 @@ entering your password.
 
 .SH IMPROVEMENTS
 
+
 .IP \[bu] 2
+Fuzzy option added. With that there is no image or solid color displayed when screen is locked. A blurring filter is applied to the screen.
+.IP \[bu]
 i3lock forks, so you can combine it with an alias to suspend to RAM (run "i3lock && echo mem > /sys/power/state" to get a locked screen after waking up your computer from suspend to RAM)
 .IP \[bu]
 You can specify either a background color or a PNG image which will be displayed while your screen is locked.
@@ -88,6 +92,10 @@ format: rrggbb (i.e. ff0000 is red).
 .B \-t, \-\-tiling
 If an image is specified (via \-i) it will display the image tiled all over the screen
 (if it is a multi-monitor setup, the image is visible on all screens).
+
+.TP
+.B \-f, \-\-fuzzy
+Turns on the fuzzy mode. In this mode i3lock will blur your screen until you unlock it.
 
 .TP
 .BI \-p\  win|default \fR,\ \fB\-\-pointer= win|default
