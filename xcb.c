@@ -87,6 +87,7 @@ xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen) {
 xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution, char *color);
 
 xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution) {
+    TIMER_START
     /* Generate a big enough pixmap */
     xcb_pixmap_t final_pixmap = xcb_generate_id(conn);
     xcb_create_pixmap(conn, scr->root_depth, final_pixmap, scr->root,
@@ -138,6 +139,7 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
 
     xcb_free_gc(conn, gc);
 
+    TIMER_END
     return final_pixmap;
 }
 
