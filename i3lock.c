@@ -525,16 +525,25 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
     xcb_query_tree_reply_t *reply = xcb_query_tree_reply(conn,
                                     xcb_query_tree(conn,scr->root), NULL);
     xcb_window_t *children = xcb_query_tree_children(reply);
-    for (int i=0;i < reply->children_len; ++i) {
-        /* Skip lock window */
-        if (children[i] == win)
-            continue;
-        /* Get attributes to check if input-only window */
-        xcb_get_window_attributes_reply_t *attribs = xcb_get_window_attributes_reply(conn, xcb_get_window_attributes(conn, children[i]), NULL);
+    xcb_get_window_attributes_cookie_t *attribs = 
+        (xcb_get_window_attributes_cookie_t*) malloc(sizeof(
+                    xcb_get_window_attributes_cookie_t) * reply->children_len);
 
-        create_damage(conn, children[i], attribs);
+    if (!attribs) {
+        errx(EXIT_FAILURE,"Failed to allocate memory");
+    }
+
+    for (int i=0;i < reply->children_len; ++i) {
+        attribs[i] = xcb_get_window_attributes_unchecked(conn, children[i]);
+    }
+    for (int i=0;i < reply->children_len; ++i) {
+        /* Get attributes to check if input-only window */
+        xcb_get_window_attributes_reply_t *attrib = xcb_get_window_attributes_reply(conn, attribs[i], NULL);
+
+        create_damage(conn, children[i], attrib);
 
     }
+    free(attribs);
     free(reply);
 }
 
