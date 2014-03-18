@@ -1,7 +1,6 @@
 #define GL_GLEXT_PROTOTYPES
 #include <GL/gl.h>
 #include <GL/glx.h>
-#include <GL/glu.h>
 #include <GL/glext.h>
 #include <GL/glxext.h>
 
@@ -219,11 +218,10 @@ void blur_image_gl(int scr, Pixmap pixmap, int width, int height) {
 
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    glOrtho(-1.0, 1.0, -1.0, 1.0, 1., 20.);
+    glOrtho(-1.0, 1.0, -1.0, 1.0, -1., 1);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
-    gluLookAt(0., 0., 10., 0., 0., 0., 0., 1., 0.);
 
     glColor3f(0.0, 0.0, 1.0);
     
@@ -237,10 +235,10 @@ void blur_image_gl(int scr, Pixmap pixmap, int width, int height) {
     }
 
     glBegin(GL_QUADS);
-    glTexCoord2f(0.0, 0.0); glVertex3f(-1.0,  1.0, 0.0);
-    glTexCoord2f(1.0, 0.0); glVertex3f( 1.0,  1.0, 0.0);
-    glTexCoord2f(1.0, 1.0); glVertex3f( 1.0, -1.0, 0.0);
-    glTexCoord2f(0.0, 1.0); glVertex3f(-1.0, -1.0, 0.0);
+    glTexCoord2f(0.0, 0.0); glVertex2f(-1.0,  1.0);
+    glTexCoord2f(1.0, 0.0); glVertex2f( 1.0,  1.0);
+    glTexCoord2f(1.0, 1.0); glVertex2f( 1.0, -1.0);
+    glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, -1.0);
     glEnd(); 
     glFlush();
     }

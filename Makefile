@@ -13,10 +13,9 @@ CFLAGS += -Wall
 CFLAGS += -g
 CPPFLAGS += -D_GNU_SOURCE
 CFLAGS += $(shell pkg-config --cflags cairo xcb-dpms xcb-xinerama xcb-atom xcb-composite xcb-damage xkbcommon xkbfile x11 x11-xcb gl)
-LIBS += $(shell pkg-config --libs cairo xcb-dpms xcb-xinerama xcb-atom xcb-image xcb-composite xcb-damage xkbcommon xkbfile x11 xdamage x11-xcb gl glu)
+LIBS += $(shell pkg-config --libs cairo xcb-dpms xcb-xinerama xcb-atom xcb-image xcb-composite xcb-damage xkbcommon xkbfile x11 x11-xcb gl)
 LIBS += -lpam
 LIBS += -lev
-LIBS += -lm
 
 FILES:=$(wildcard *.c)
 FILES:=$(FILES:.c=.o)
