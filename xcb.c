@@ -20,6 +20,7 @@
 #include <assert.h>
 #include <err.h>
 
+#include "xcb.h"
 #include "cursors.h"
 
 xcb_connection_t *conn;

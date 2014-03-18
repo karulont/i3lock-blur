@@ -383,11 +383,27 @@ static void handle_visibility_notify(xcb_connection_t *conn,
     }
 }
 
+/*
+ * Create a DAMAGE object to input/output class windows
+ *
+ */
+static void create_damage(xcb_connection_t *conn, xcb_window_t window,
+        xcb_get_window_attributes_reply_t *win_attrib) {
+    if (win_attrib) {
+        if (win_attrib->_class != XCB_WINDOW_CLASS_INPUT_ONLY) {
+            xcb_damage_damage_t dam = xcb_generate_id(conn);
+            xcb_damage_create(conn, dam, window,
+                    XCB_DAMAGE_REPORT_LEVEL_NON_EMPTY);
+        }
+        free(win_attrib);
+    }
+}
+
 static void handle_map_notify(xcb_map_notify_event_t *event) {
     if (fuzzy) {
         /* Create damage objects for new windows */
-        xcb_damage_damage_t dam = xcb_generate_id(conn);
-        xcb_damage_create(conn, dam, event->window, XCB_DAMAGE_REPORT_LEVEL_NON_EMPTY);
+        xcb_get_window_attributes_reply_t *attribs = xcb_get_window_attributes_reply(conn, xcb_get_window_attributes(conn, event->window), NULL);
+        create_damage(conn, event->window, attribs);
     }
     if (!dont_fork) {
         /* After the first MapNotify, we never fork again. */
@@ -506,7 +522,7 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
 
     dam_ext_data = xcb_get_extension_data(conn, &xcb_damage_id);
 
-    xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
+    xcb_query_tree_reply_t *reply = xcb_query_tree_reply(conn,
                                     xcb_query_tree(conn,scr->root), NULL);
     xcb_window_t *children = xcb_query_tree_children(reply);
     for (int i=0;i < reply->children_len; ++i) {
@@ -516,15 +532,9 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
         /* Get attributes to check if input-only window */
         xcb_get_window_attributes_reply_t *attribs = xcb_get_window_attributes_reply(conn, xcb_get_window_attributes(conn, children[i]), NULL);
 
-        if (attribs->_class == XCB_WINDOW_CLASS_INPUT_ONLY) {
-            free(attribs);
-            continue;
-        }
-        free(attribs);
-        xcb_damage_damage_t dam = xcb_generate_id(conn);
-        xcb_damage_create(conn, dam, children[i], XCB_DAMAGE_REPORT_LEVEL_NON_EMPTY);
-    }
+        create_damage(conn, children[i], attribs);
 
+    }
     free(reply);
 }
 
