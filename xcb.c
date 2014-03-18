@@ -99,27 +99,41 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
     xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
                                     xcb_query_tree(conn,scr->root), NULL);
     xcb_window_t *children = xcb_query_tree_children(reply);
+    xcb_get_window_attributes_cookie_t *attribs = 
+        (xcb_get_window_attributes_cookie_t*) malloc(sizeof
+                (xcb_get_window_attributes_cookie_t)*reply->children_len);
+    xcb_get_geometry_cookie_t *geos = (xcb_get_geometry_cookie_t*)
+        malloc(sizeof(xcb_get_geometry_cookie_t)*reply->children_len);
+
     for (int i=0;i < reply->children_len; ++i) {
         /* Get attributes to check if input-only window */
-        xcb_get_window_attributes_reply_t *attribs = xcb_get_window_attributes_reply(conn, xcb_get_window_attributes(conn, children[i]), NULL);
+        attribs[i] = xcb_get_window_attributes(conn, children[i]);
+        geos[i] = xcb_get_geometry(conn, children[i]);
+    }
+
+
+    for (int i=0;i < reply->children_len; ++i) {
+        /* Get attributes to check if input-only window */
+        xcb_get_window_attributes_reply_t *attrib = xcb_get_window_attributes_reply(conn, attribs[i], NULL);
 
         /* If attributes are NULL then the window was destroyed */
-        if (!attribs) {
+        if (!attrib) {
             continue;
         }
 
-        if (attribs->_class == XCB_WINDOW_CLASS_INPUT_ONLY) {
-            free(attribs);
+        if (attrib->_class == XCB_WINDOW_CLASS_INPUT_ONLY) {
+            free(attrib);
             continue;
         }
-        free(attribs);
+        free(attrib);
 
         /* Copy area to final_pixmap */
-        xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(conn, xcb_get_geometry(conn, children[i]), NULL);
+        xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(conn, geos[i], NULL);
         xcb_copy_area(conn, children[i], final_pixmap, gc, 0, 0, geo->x, geo->y, geo->width, geo->height);
         free(geo);
     }
-
+    free(geos);
+    free(attribs);
     free(reply);
 
     xcb_free_gc(conn, gc);
