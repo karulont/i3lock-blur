@@ -36,6 +36,13 @@
 #include "blur.h"
 #include "xinerama.h"
 
+#define START_TIMER(timer_obj, timeout, callback) \
+    timer_obj = start_timer(timer_obj, timeout, callback)
+#define STOP_TIMER(timer_obj) \
+    timer_obj = stop_timer(timer_obj)
+
+typedef void (*ev_callback_t)(EV_P_ ev_timer *w, int revents);
+
 /* We need this for libxkbfile */
 Display *display;
 char color[7] = "ffffff";
@@ -54,6 +61,7 @@ bool unlock_indicator = true;
 static bool dont_fork = false;
 struct ev_loop *main_loop;
 static struct ev_timer *clear_pam_wrong_timeout;
+static struct ev_timer *clear_indicator_timeout;
 extern unlock_state_t unlock_state;
 extern pam_state_t pam_state;
 
@@ -77,6 +85,16 @@ bool ignore_empty_password = false;
  */
 void u8_dec(char *s, int *i) {
     (void)(isutf(s[--(*i)]) || isutf(s[--(*i)]) || isutf(s[--(*i)]) || --(*i));
+}
+
+static void turn_monitors_on(void) {
+    if (dpms)
+        dpms_set_mode(conn, XCB_DPMS_DPMS_MODE_ON);
+}
+
+static void turn_monitors_off(void) {
+    if (dpms)
+        dpms_set_mode(conn, XCB_DPMS_DPMS_MODE_OFF);
 }
 
 /*
@@ -174,6 +192,30 @@ static void clear_password_memory(void) {
         vpassword[c] = c + (int)beep;
 }
 
+ev_timer* start_timer(ev_timer *timer_obj, ev_tstamp timeout, ev_callback_t callback) {
+    if (timer_obj) {
+        ev_timer_stop(main_loop, timer_obj);
+        ev_timer_set(timer_obj, timeout, 0.);
+        ev_timer_start(main_loop, timer_obj);
+    } else {
+        /* When there is no memory, we just don’t have a timeout. We cannot
+         * exit() here, since that would effectively unlock the screen. */
+        timer_obj = calloc(sizeof(struct ev_timer), 1);
+        if (timer_obj) {
+            ev_timer_init(timer_obj, callback, timeout, 0.);
+            ev_timer_start(main_loop, timer_obj);
+        }
+    }
+    return timer_obj;
+}
+
+ev_timer* stop_timer(ev_timer *timer_obj) {
+    if (timer_obj) {
+        ev_timer_stop(main_loop, timer_obj);
+        free(timer_obj);
+    }
+    return NULL;
+}
 
 /*
  * Resets pam_state to STATE_PAM_IDLE 2 seconds after an unsuccesful
@@ -192,6 +234,11 @@ static void clear_pam_wrong(EV_P_ ev_timer *w, int revents) {
     clear_pam_wrong_timeout = NULL;
 }
 
+static void clear_indicator_cb(EV_P_ ev_timer *w, int revents) {
+    clear_indicator();
+    STOP_TIMER(clear_indicator_timeout);
+}
+
 static void clear_input(void) {
     input_position = 0;
     clear_password_memory();
@@ -199,7 +246,7 @@ static void clear_input(void) {
 
     /* Hide the unlock indicator after a bit if the password buffer is
      * empty. */
-    start_clear_indicator_timeout();
+    START_TIMER(clear_indicator_timeout, 1.0, clear_indicator_cb);
     unlock_state = STATE_BACKSPACE_ACTIVE;
     redraw_unlock_indicator();
     unlock_state = STATE_KEY_PRESSED;
@@ -220,8 +267,7 @@ static void input_done(void) {
         clear_password_memory();
         /* Turn the screen on, as it may have been turned off
          * on release of the 'enter' key. */
-        if (dpms)
-            dpms_set_mode(conn, XCB_DPMS_DPMS_MODE_ON);
+        turn_monitors_on();
         exit(0);
     }
 
@@ -242,7 +288,7 @@ static void input_done(void) {
 
     /* Cancel the clear_indicator_timeout, it would hide the unlock indicator
      * too early. */
-    stop_clear_indicator_timeout();
+    STOP_TIMER(clear_indicator_timeout);
 
     /* beep on authentication failure, if enabled */
     if (beep) {
@@ -323,7 +369,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
 
         /* Hide the unlock indicator after a bit if the password buffer is
          * empty. */
-        start_clear_indicator_timeout();
+        START_TIMER(clear_indicator_timeout, 1.0, clear_indicator_cb);
         unlock_state = STATE_BACKSPACE_ACTIVE;
         redraw_unlock_indicator();
         unlock_state = STATE_KEY_PRESSED;
@@ -362,7 +408,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
         ev_timer_start(main_loop, timeout);
     }
 
-    stop_clear_indicator_timeout();
+    STOP_TIMER(clear_indicator_timeout);
 }
 
 /*
@@ -594,8 +640,8 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
 
                 /* If this was the backspace or escape key we are back at an
                  * empty input, so turn off the screen if DPMS is enabled */
-                if (dpms && input_position == 0)
-                    dpms_set_mode(conn, XCB_DPMS_DPMS_MODE_OFF);
+                if (input_position == 0)
+                    turn_monitors_off();
 
                 break;
 
@@ -703,7 +749,7 @@ int main(int argc, char *argv[]) {
     };
 
     if ((username = getenv("USER")) == NULL)
-        errx(1, "USER environment variable not set, please set it.\n");
+        errx(EXIT_FAILURE, "USER environment variable not set, please set it.\n");
 
     while ((o = getopt_long(argc, argv, "hvnbdc:p:ui:tfe", longopts, &optind)) != -1) {
         switch (o) {
@@ -726,7 +772,7 @@ int main(int argc, char *argv[]) {
                 arg++;
 
             if (strlen(arg) != 6 || sscanf(arg, "%06[0-9a-fA-F]", color) != 1)
-                errx(1, "color is invalid, it must be given in 3-byte hexadecimal format: rrggbb\n");
+                errx(EXIT_FAILURE, "color is invalid, it must be given in 3-byte hexadecimal format: rrggbb\n");
 
             break;
         }
@@ -748,7 +794,7 @@ int main(int argc, char *argv[]) {
             } else if (!strcmp(optarg, "default")) {
                 curs_choice = CURS_DEFAULT;
             } else {
-                errx(1, "i3lock: Invalid pointer type given. Expected one of \"win\" or \"default\".\n");
+                errx(EXIT_FAILURE, "i3lock: Invalid pointer type given. Expected one of \"win\" or \"default\".\n");
             }
             break;
         case 'e':
@@ -759,7 +805,7 @@ int main(int argc, char *argv[]) {
                 debug_mode = true;
             break;
         default:
-            errx(1, "Syntax: i3lock [-v] [-n] [-b] [-d] [-c color] [-u] [-p win|default]"
+            errx(EXIT_FAILURE, "Syntax: i3lock [-v] [-n] [-b] [-d] [-c color] [-u] [-p win|default]"
             " [-i image.png] [-t] [-f] [-e]"
             );
         }
@@ -871,8 +917,7 @@ int main(int argc, char *argv[]) {
      * keyboard. */
     (void)load_keymap();
 
-    if (dpms)
-        dpms_set_mode(conn, XCB_DPMS_DPMS_MODE_OFF);
+    turn_monitors_off();
 
     /* Initialize the libev event loop. */
     main_loop = EV_DEFAULT;
