@@ -4,7 +4,6 @@
 #include <GL/glext.h>
 #include <GL/glxext.h>
 
-#include "xcb.h"
 #include "blur.h"
 
 extern Display *display;
@@ -186,7 +185,6 @@ void glx_deinit(void) {
 }
 
 void blur_image_gl(int scr, Pixmap pixmap, int width, int height) {
-    TIMER_START
     if (configs == NULL ) {
         glx_init(scr, width, height);
     }
@@ -246,5 +244,4 @@ void blur_image_gl(int scr, Pixmap pixmap, int width, int height) {
     XCopyArea(display, tmp1, pixmap, gc, 0, 0, width, height, 0, 0);
     XFreeGC(display, gc);
     glXDestroyPixmap(display, glx_pixmap);
-    TIMER_END
 }

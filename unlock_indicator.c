@@ -25,7 +25,6 @@
 #define BUTTON_CENTER (BUTTON_RADIUS + 5)
 #define BUTTON_DIAMETER (2 * BUTTON_SPACE)
 
-
 /*******************************************************************************
  * Variables defined in i3lock.c.
  ******************************************************************************/
@@ -217,7 +216,6 @@ static void draw_unlock_indicator() {
  *
  */
 xcb_pixmap_t draw_image(uint32_t *resolution) {
-    TIMER_START
     xcb_pixmap_t bg_pixmap = XCB_NONE;
 
     if (!vistype)
@@ -291,7 +289,6 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
 
     cairo_surface_destroy(xcb_output);
     cairo_destroy(xcb_ctx);
-    TIMER_END
     return bg_pixmap;
 }
 
@@ -300,7 +297,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
  *
  */
 void redraw_screen(void) {
-    TIMER_START;
+
     /* avoid drawing if monitor state is not on */
     if (dpms_capable) {
         xcb_dpms_info_reply_t *dpms_info =
@@ -323,7 +320,6 @@ void redraw_screen(void) {
     xcb_clear_area(conn, 0, win, 0, 0, last_resolution[0], last_resolution[1]);
     xcb_free_pixmap(conn, bg_pixmap);
     xcb_flush(conn);
-    TIMER_END;
 }
 
 /* 
