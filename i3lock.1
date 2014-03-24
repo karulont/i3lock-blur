@@ -29,6 +29,7 @@ i3lock \- improved screen locker
 .IR pointer\|]
 .RB [\|\-u\|]
 .RB [\|\-e\|]
+.RB [\|\-I\|]
 
 .SH DESCRIPTION
 .B i3lock
@@ -73,6 +74,13 @@ option, DPMS will turn off your screen after 15 minutes of inactivity anyways (i
 you did not disable this in your X server).
 
 .TP
+.B \-I, \-\-inactivity-timeout
+Specifies the number of seconds i3lock will wait for another password before
+turning off the monitors, in case you entered a wrong password or canceled by
+pressing Escape. Only makes sense together with \-d. If omitted, the default is
+30 seconds.
+
+.TP
 .B \-u, \-\-no-unlock-indicator
 Disable the unlock indicator. i3lock will by default show an unlock indicator
 after pressing keys. This will give feedback for every keypress and it will
@@ -85,7 +93,7 @@ Display the given PNG image instead of a blank screen.
 
 .TP
 .BI \-c\  rrggbb \fR,\ \fB\-\-color= rrggbb
-Turn the screen into the given color instead of white. Color must be given in 6-byte
+Turn the screen into the given color instead of white. Color must be given in 3-byte
 format: rrggbb (i.e. ff0000 is red).
 
 .TP
