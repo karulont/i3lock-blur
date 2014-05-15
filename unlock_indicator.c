@@ -1,13 +1,14 @@
 /*
  * vim:ts=4:sw=4:expandtab
  *
- * © 2010-2012 Michael Stapelberg
+ * © 2010-2014 Michael Stapelberg
  *
  * See LICENSE for licensing information
  *
  */
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include <xcb/xcb.h>
 #include <ev.h>
@@ -15,6 +16,7 @@
 #include <cairo/cairo-xcb.h>
 #include <X11/Xlib.h>
 
+#include "i3lock.h"
 #include "xcb.h"
 #include "unlock_indicator.h"
 #include "xinerama.h"
@@ -29,6 +31,8 @@
  * Variables defined in i3lock.c.
  ******************************************************************************/
 
+extern bool debug_mode;
+
 /* The current position in the input buffer. Useful to determine if any
  * characters of the password have already been entered or not. */
 int input_position;
@@ -38,6 +42,7 @@ extern xcb_window_t win;
 
 /* The current resolution of the X11 root window. */
 extern uint32_t last_resolution[2];
+uint32_t button_diameter_physical;
 
 /* Whether the unlock indicator is enabled (defaults to true). */
 extern bool unlock_indicator;
@@ -53,6 +58,13 @@ extern bool fuzzy;
 extern char color[7];
 extern Display *display;
 /*******************************************************************************
+ * Variables defined in xcb.c.
+ ******************************************************************************/
+
+/* The root screen, to determine the DPI. */
+extern xcb_screen_t *screen;
+
+/*******************************************************************************
  * Local variables.
  ******************************************************************************/
 
@@ -67,10 +79,24 @@ pam_state_t pam_state;
 /* A surface for the unlock indicator */
 static cairo_surface_t *unlock_indicator_surface = NULL;
 
+/*
+ * Returns the scaling factor of the current screen. E.g., on a 227 DPI MacBook
+ * Pro 13" Retina screen, the scaling factor is 227/96 = 2.36.
+ *
+ */
+static double scaling_factor(void) {
+    const int dpi = (double)screen->height_in_pixels * 25.4 /
+                    (double)screen->height_in_millimeters;
+    return (dpi / 96.0);
+}
+
 static void draw_unlock_indicator() {
     /* Initialise the surface if not yet done */
     if (unlock_indicator_surface == NULL) {
-        unlock_indicator_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, BUTTON_DIAMETER, BUTTON_DIAMETER);
+        button_diameter_physical = ceil(scaling_factor() * BUTTON_DIAMETER);
+        DEBUG("scaling_factor is %.f, physical diameter is %d px\n",
+                scaling_factor(), button_diameter_physical);
+        unlock_indicator_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, button_diameter_physical, button_diameter_physical);
     }
 
     cairo_t *ctx = cairo_create(unlock_indicator_surface);
@@ -81,6 +107,7 @@ static void draw_unlock_indicator() {
     cairo_restore(ctx);
 
     if (unlock_state >= STATE_KEY_PRESSED && unlock_indicator) {
+        cairo_scale(ctx, scaling_factor(), scaling_factor());
         /* Draw a (centered) circle with transparent background. */
         cairo_set_line_width(ctx, 10.0);
         cairo_arc(ctx,
@@ -265,20 +292,20 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
     if (xr_screens > 0) {
         /* Composite the unlock indicator in the middle of each screen. */
         for (int screen = 0; screen < xr_screens; screen++) {
-            int x = (xr_resolutions[screen].x + ((xr_resolutions[screen].width / 2) - (BUTTON_DIAMETER / 2)));
-            int y = (xr_resolutions[screen].y + ((xr_resolutions[screen].height / 2) - (BUTTON_DIAMETER / 2)));
+            int x = (xr_resolutions[screen].x + ((xr_resolutions[screen].width / 2) - (button_diameter_physical / 2)));
+            int y = (xr_resolutions[screen].y + ((xr_resolutions[screen].height / 2) - (button_diameter_physical / 2)));
             cairo_set_source_surface(xcb_ctx, unlock_indicator_surface, x, y);
-            cairo_rectangle(xcb_ctx, x, y, BUTTON_DIAMETER, BUTTON_DIAMETER);
+            cairo_rectangle(xcb_ctx, x, y, button_diameter_physical, button_diameter_physical);
             cairo_fill(xcb_ctx);
         }
     } else {
         /* We have no information about the screen sizes/positions, so we just
          * place the unlock indicator in the middle of the X root window and
          * hope for the best. */
-        int x = (last_resolution[0] / 2) - (BUTTON_DIAMETER / 2);
-        int y = (last_resolution[1] / 2) - (BUTTON_DIAMETER / 2);
+        int x = (last_resolution[0] / 2) - (button_diameter_physical / 2);
+        int y = (last_resolution[1] / 2) - (button_diameter_physical / 2);
         cairo_set_source_surface(xcb_ctx, unlock_indicator_surface, x, y);
-        cairo_rectangle(xcb_ctx, x, y, BUTTON_DIAMETER, BUTTON_DIAMETER);
+        cairo_rectangle(xcb_ctx, x, y, button_diameter_physical, button_diameter_physical);
         cairo_fill(xcb_ctx);
     }
 
@@ -336,4 +363,13 @@ void clear_indicator(void) {
         unlock_state = STATE_STARTED;
     } else unlock_state = STATE_KEY_PRESSED;
     redraw_unlock_indicator();
+}
+
+/*
+ * Clears the old unlock indicator surface so
+ */
+
+void resize_screen(void) {
+    cairo_surface_destroy(unlock_indicator_surface);
+    unlock_indicator_surface = NULL;
 }

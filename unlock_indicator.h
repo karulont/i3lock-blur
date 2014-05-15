@@ -20,5 +20,6 @@ xcb_pixmap_t draw_image(uint32_t* resolution);
 void redraw_screen(void);
 void redraw_unlock_indicator(void);
 void clear_indicator(void);
+void resize_screen(void);
 
 #endif
