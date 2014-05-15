@@ -21,8 +21,8 @@ LIBS += -lm
 FILES:=$(wildcard *.c)
 FILES:=$(FILES:.c=.o)
 
-VERSION:=$(shell git describe --tags --abbrev=0)
-GIT_VERSION:="$(shell git describe --tags --always) ($(shell git log --pretty=format:%cd --date=short -n1))"
+VERSION:=2.5.2
+GIT_VERSION:="2.5.2 (2014-05-15)"
 CPPFLAGS += -DVERSION=\"${GIT_VERSION}\"
 
 .PHONY: install clean uninstall
