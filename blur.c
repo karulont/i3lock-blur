@@ -3,6 +3,10 @@
 #include <GL/glx.h>
 #include <GL/glext.h>
 #include <GL/glxext.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
 
 #include "blur.h"
 
@@ -52,35 +56,95 @@ static const char *VERT_SHADER =
     "gl_Position = ftransform();\n"
     "v_Coordinates = vec2(gl_MultiTexCoord0);\n"
 "}\n";
-static const char *FRAG_SHADER =
+static const char *FRAG_SHADER_P1 =
 "#version 130\n"
-"/////////////////////////////////////////////////\n"
-"// 7x1 gaussian blur fragment shader\n"
-"/////////////////////////////////////////////////\n"
- 
 "varying vec2 v_Coordinates;\n"
  
 "uniform vec2 u_Scale;\n"
-"uniform sampler2D u_Texture0;\n"
+"uniform sampler2D u_Texture0;\n";
  
-"const vec2 gaussFilter[5] = \n"
-"vec2[](\n"
-    "vec2 (-3.2307692308, 0.0702702703),\n"
-    "vec2 (-1.3846153846, 0.3162162162),\n"
-    "vec2 (0.0,           0.2270270270),\n"
-    "vec2 (1.3846153846,  0.3162162162),\n"
-    "vec2 (3.2307692308,  0.0702702703)\n"
-");\n"
+static const char *FRAG_SHADER_F1 = "const vec2 gaussFilter[%d] = \n"
+"vec2[](\n";
+static const char *FRAG_SHADER_F2 = "vec2 (%f, %f),\n";
+static const char *FRAG_SHADER_F3 = "vec2 (%f, %f)\n"
+");\n";
 
+static const char *FRAG_SHADER_P3 =
 "void main()\n"
 "{\n"
-    "vec4 color = vec4(0.0,0.0,0.0,0.0);\n"
-    "for( int i = 0; i < 5; i++ )\n"
+    "vec4 color = vec4(0.0,0.0,0.0,0.0);\n";
+static const char *FRAG_SHADER_F4 = "for( int i = 0; i < %d; i++ )\n";
+static const char *FRAG_SHADER_P4 =
     "{\n"
         "color += texture2D( u_Texture0, vec2( v_Coordinates.x+gaussFilter[i].x*u_Scale.x, v_Coordinates.y+gaussFilter[i].x*u_Scale.y ) )*gaussFilter[i].y;\n"
     "}\n"
     "gl_FragColor = color;\n"
 "}\n";
+
+static void generate_fragment_shader(char *output, int blur_radius, float sigma) {
+    // First, generate the normal Gaussian weights for a given sigma
+    float *standardGaussianWeights = calloc(blur_radius + 1, sizeof(float));
+    float sumOfWeights = 0.0;
+    for (int currentGaussianWeightIndex = 0; currentGaussianWeightIndex < blur_radius + 1; currentGaussianWeightIndex++)
+    {
+        standardGaussianWeights[currentGaussianWeightIndex] = (1.0 / sqrt(2.0 * M_PI * pow(sigma, 2.0))) * exp(-pow(currentGaussianWeightIndex, 2.0) / (2.0 * pow(sigma, 2.0)));
+
+        if (currentGaussianWeightIndex == 0)
+        {
+            sumOfWeights += standardGaussianWeights[currentGaussianWeightIndex];
+        }
+        else
+        {
+            sumOfWeights += 2.0 * standardGaussianWeights[currentGaussianWeightIndex];
+        }
+    }
+
+    // Next, normalize these weights to prevent the clipping of the Gaussian curve at the end of the discrete samples from reducing luminance
+    for (int currentGaussianWeightIndex = 0; currentGaussianWeightIndex < blur_radius + 1; currentGaussianWeightIndex++)
+    {
+        standardGaussianWeights[currentGaussianWeightIndex] = standardGaussianWeights[currentGaussianWeightIndex] / sumOfWeights;
+    }
+
+    // From these weights we calculate the offsets to read interpolated values from
+    int numberOfOptimizedOffsets = blur_radius / 2 + (blur_radius % 2);
+    float *optimizedGaussianOffsets = calloc(numberOfOptimizedOffsets, sizeof(float));
+    float *optimizedGaussianWeights = calloc(numberOfOptimizedOffsets, sizeof(float));
+
+    for (int currentOptimizedOffset = 0; currentOptimizedOffset < numberOfOptimizedOffsets; currentOptimizedOffset++)
+    {
+        float firstWeight = standardGaussianWeights[currentOptimizedOffset*2 + 1];
+        float secondWeight = standardGaussianWeights[currentOptimizedOffset*2 + 2];
+
+        float optimizedWeight = firstWeight + secondWeight;
+
+        optimizedGaussianWeights[currentOptimizedOffset] = optimizedWeight;        
+        optimizedGaussianOffsets[currentOptimizedOffset] = (firstWeight * (currentOptimizedOffset*2 + 1) + secondWeight * (currentOptimizedOffset*2 + 2)) / optimizedWeight;
+    }
+
+    char buf[512];
+    strcpy(output, FRAG_SHADER_P1);
+    sprintf(buf, FRAG_SHADER_F1, 2*numberOfOptimizedOffsets+1);
+    strcat(output, buf);
+    sprintf(buf, FRAG_SHADER_F2, 0.0, standardGaussianWeights[0]);
+    strcat(output, buf);
+    for (int i=0; i!=numberOfOptimizedOffsets-1; ++i) {
+        sprintf(buf, FRAG_SHADER_F2, optimizedGaussianOffsets[i], optimizedGaussianWeights[i]);
+        strcat(output, buf);
+        sprintf(buf, FRAG_SHADER_F2, -optimizedGaussianOffsets[i], optimizedGaussianWeights[i]);
+        strcat(output, buf);
+    }
+    sprintf(buf, FRAG_SHADER_F2, optimizedGaussianOffsets[numberOfOptimizedOffsets-1], optimizedGaussianWeights[numberOfOptimizedOffsets-1]);
+    strcat(output, buf);
+    sprintf(buf, FRAG_SHADER_F3, -optimizedGaussianOffsets[numberOfOptimizedOffsets-1], optimizedGaussianWeights[numberOfOptimizedOffsets-1]);
+    strcat(output, buf);
+    strcat(output, FRAG_SHADER_P3);
+    sprintf(buf, FRAG_SHADER_F4, 2*numberOfOptimizedOffsets+1);
+    strcat(output, buf);
+    strcat(output, FRAG_SHADER_P4);
+    free(standardGaussianWeights);
+    free(optimizedGaussianWeights);
+    free(optimizedGaussianOffsets);
+}
 
 GLXFBConfig *configs = NULL;
 GLXContext ctx;
@@ -137,7 +201,10 @@ void glx_init(int scr, int w, int h) {
     printShaderInfoLog(v_shader);
 #endif
     f_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(f_shader, 1, &FRAG_SHADER, NULL);
+    char fragment_shader[1024];
+    generate_fragment_shader(fragment_shader, 7, 4);
+    GLchar const* files[] = {fragment_shader};
+    glShaderSource(f_shader, 1, files, NULL);
     glCompileShader(f_shader);
     glGetShaderiv(f_shader, GL_COMPILE_STATUS, &i);
 #if DEBUG_GL
