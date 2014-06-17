@@ -175,7 +175,7 @@ const int pixmap_attribs[] = {
     None
 };
 
-void glx_init(int scr, int w, int h) {
+void glx_init(int scr, int w, int h, int radius, float sigma) {
     int i;
     configs = glXChooseFBConfig(display, scr, pixmap_config, &i);
     vis = glXGetVisualFromFBConfig(display, configs[0]);
@@ -203,7 +203,7 @@ void glx_init(int scr, int w, int h) {
     printShaderInfoLog(v_shader);
 #endif
     f_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    char *fragment_shader = generate_fragment_shader(7, 4);
+    char *fragment_shader = generate_fragment_shader(radius, sigma);
     GLchar const* files[] = {fragment_shader};
     glShaderSource(f_shader, 1, files, NULL);
     free(fragment_shader);

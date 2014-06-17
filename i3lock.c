@@ -79,6 +79,8 @@ const xcb_query_extension_reply_t *dam_ext_data;
 cairo_surface_t *img = NULL;
 bool tile = false;
 bool fuzzy = false;
+int blur_radius = 0;
+float blur_sigma = 0;
 bool ignore_empty_password = false;
 bool skip_repeated_empty_password = false;
 
@@ -745,6 +747,13 @@ static void raise_loop(xcb_window_t window) {
     }
 }
 
+static void init_blur_coefficents() {
+    if (blur_radius != 0 && blur_sigma != 0 ) {
+        blur_radius = 4;
+        blur_sigma = 2;
+    }
+}
+
 int main(int argc, char *argv[]) {
     char *username;
     char *image_path = NULL;
@@ -766,6 +775,8 @@ int main(int argc, char *argv[]) {
         {"image", required_argument, NULL, 'i'},
         {"tiling", no_argument, NULL, 't'},
         {"fuzzy", no_argument, NULL, 'f'},
+        {"radius", required_argument, NULL, 'r'},
+        {"sigma", required_argument, NULL, 's'},
         {"ignore-empty-password", no_argument, NULL, 'e'},
         {"inactivity-timeout", required_argument, NULL, 'I'},
         {NULL, no_argument, NULL, 0}
@@ -774,7 +785,7 @@ int main(int argc, char *argv[]) {
     if ((username = getenv("USER")) == NULL)
         errx(EXIT_FAILURE, "USER environment variable not set, please set it.\n");
 
-    char *optstring = "hvnbdc:p:ui:tfeI:";
+    char *optstring = "hvnbdc:p:ui:tfr:s:eI:";
     while ((o = getopt_long(argc, argv, optstring, longopts, &optind)) != -1) {
         switch (o) {
         case 'v':
@@ -818,6 +829,12 @@ int main(int argc, char *argv[]) {
             break;
         case 'f':
             fuzzy = true;
+            break;
+        case 'r':
+            sscanf(optarg, "%d", &blur_radius);
+            break;
+        case 's':
+            sscanf(optarg, "%f", &blur_sigma);
             break;
         case 'p':
             if (!strcmp(optarg, "win")) {
@@ -916,6 +933,7 @@ int main(int argc, char *argv[]) {
 
     /* open the fullscreen window, already with the correct pixmap in place */
     if (fuzzy) {
+        init_blur_coefficents();
         win = open_overlay_window(conn, screen);
     }
     else {
