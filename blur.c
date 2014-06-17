@@ -81,7 +81,7 @@ static const char *FRAG_SHADER_P4 =
     "gl_FragColor = color;\n"
 "}\n";
 
-static void generate_fragment_shader(char *output, int blur_radius, float sigma) {
+static char *generate_fragment_shader(int blur_radius, float sigma) {
     // First, generate the normal Gaussian weights for a given sigma
     float *standardGaussianWeights = calloc(blur_radius + 1, sizeof(float));
     float sumOfWeights = 0.0;
@@ -120,7 +120,8 @@ static void generate_fragment_shader(char *output, int blur_radius, float sigma)
         optimizedGaussianWeights[currentOptimizedOffset] = optimizedWeight;        
         optimizedGaussianOffsets[currentOptimizedOffset] = (firstWeight * (currentOptimizedOffset*2 + 1) + secondWeight * (currentOptimizedOffset*2 + 2)) / optimizedWeight;
     }
-
+    int size = sizeof(char) * (450 + 56 * numberOfOptimizedOffsets);
+    char *output = (char*)malloc(size);
     char buf[512];
     strcpy(output, FRAG_SHADER_P1);
     sprintf(buf, FRAG_SHADER_F1, 2*numberOfOptimizedOffsets+1);
@@ -144,6 +145,7 @@ static void generate_fragment_shader(char *output, int blur_radius, float sigma)
     free(standardGaussianWeights);
     free(optimizedGaussianWeights);
     free(optimizedGaussianOffsets);
+    return output;
 }
 
 GLXFBConfig *configs = NULL;
@@ -201,10 +203,10 @@ void glx_init(int scr, int w, int h) {
     printShaderInfoLog(v_shader);
 #endif
     f_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    char fragment_shader[1024];
-    generate_fragment_shader(fragment_shader, 7, 4);
+    char *fragment_shader = generate_fragment_shader(7, 4);
     GLchar const* files[] = {fragment_shader};
     glShaderSource(f_shader, 1, files, NULL);
+    free(fragment_shader);
     glCompileShader(f_shader);
     glGetShaderiv(f_shader, GL_COMPILE_STATUS, &i);
 #if DEBUG_GL
@@ -251,15 +253,15 @@ void glx_deinit(void) {
     glDeleteProgram(shader_prog);
 }
 
-void blur_image_gl(int scr, Pixmap pixmap, int width, int height) {
+void blur_image_gl(int scr, Pixmap pixmap, int width, int height, int radius, float sigma) {
     if (configs == NULL ) {
-        glx_init(scr, width, height);
+        glx_init(scr, width, height, radius, sigma);
     }
 
 
     glx_pixmap = glXCreatePixmap(display, configs[0], pixmap, pixmap_attribs);
 
-    for (uint8_t i=0;i<4;++i) {
+    for (uint8_t i=0;i<2;++i) {
     if ((i & 1) == 0) {
         glXMakeCurrent(display, glx_tmp, ctx);
     }
