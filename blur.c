@@ -262,52 +262,52 @@ void blur_image_gl(int scr, Pixmap pixmap, int width, int height, int radius, fl
     glx_pixmap = glXCreatePixmap(display, configs[0], pixmap, pixmap_attribs);
 
     for (uint8_t i=0;i<2;++i) {
-    if ((i & 1) == 0) {
-        glXMakeCurrent(display, glx_tmp, ctx);
-    }
-    else {
-        glXMakeCurrent(display, glx_tmp1, ctx);
-    }
-    glEnable(GL_TEXTURE_2D);
-    if (i==0) {
-        glXBindTexImageEXT(display, glx_pixmap, GLX_FRONT_EXT, NULL);
-    } else {
-        glXBindTexImageEXT(display, (i & 1) == 1 ? glx_tmp : glx_tmp1, GLX_FRONT_EXT, NULL);
-    }
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL); 
+        if ((i & 1) == 0) {
+            glXMakeCurrent(display, glx_tmp, ctx);
+        }
+        else {
+            glXMakeCurrent(display, glx_tmp1, ctx);
+        }
+        glEnable(GL_TEXTURE_2D);
+        if (i==0) {
+            glXBindTexImageEXT(display, glx_pixmap, GLX_FRONT_EXT, NULL);
+        } else {
+            glXBindTexImageEXT(display, (i & 1) == 1 ? glx_tmp : glx_tmp1, GLX_FRONT_EXT, NULL);
+        }
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL); 
 
 
-    glViewport(0, 0, (GLsizei) width, (GLsizei) height);
-    glClearColor(0.3, 0.3, 0.3, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT);
+        glViewport(0, 0, (GLsizei) width, (GLsizei) height);
+        glClearColor(0.3, 0.3, 0.3, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT);
 
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(-1.0, 1.0, -1.0, 1.0, -1., 1);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(-1.0, 1.0, -1.0, 1.0, -1., 1);
 
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
 
-    glColor3f(0.0, 0.0, 1.0);
-    
-    glUseProgram(shader_prog);
-    GLint u_Scale = glGetUniformLocation(shader_prog, "u_Scale");
-    if ( (i & 1) == 0) {
-        glUniform2f(u_Scale,  1.0 / width, 0);
-    }
-    else {
-        glUniform2f(u_Scale, 0, 1.0 / height);
-    }
+        glColor3f(0.0, 0.0, 1.0);
 
-    glBegin(GL_QUADS);
-    glTexCoord2f(0.0, 0.0); glVertex2f(-1.0,  1.0);
-    glTexCoord2f(1.0, 0.0); glVertex2f( 1.0,  1.0);
-    glTexCoord2f(1.0, 1.0); glVertex2f( 1.0, -1.0);
-    glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, -1.0);
-    glEnd(); 
-    glFlush();
+        glUseProgram(shader_prog);
+        GLint u_Scale = glGetUniformLocation(shader_prog, "u_Scale");
+        if ( (i & 1) == 0) {
+            glUniform2f(u_Scale,  1.0 / width, 0);
+        }
+        else {
+            glUniform2f(u_Scale, 0, 1.0 / height);
+        }
+
+        glBegin(GL_QUADS);
+        glTexCoord2f(0.0, 0.0); glVertex2f(-1.0,  1.0);
+        glTexCoord2f(1.0, 0.0); glVertex2f( 1.0,  1.0);
+        glTexCoord2f(1.0, 1.0); glVertex2f( 1.0, -1.0);
+        glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, -1.0);
+        glEnd(); 
+        glFlush();
     }
     GC gc = XCreateGC(display, pixmap, 0, NULL);
     XCopyArea(display, tmp1, pixmap, gc, 0, 0, width, height, 0, 0);
