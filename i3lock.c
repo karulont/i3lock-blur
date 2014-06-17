@@ -748,9 +748,13 @@ static void raise_loop(xcb_window_t window) {
 }
 
 static void init_blur_coefficents() {
-    if (blur_radius != 0 && blur_sigma != 0 ) {
-        blur_radius = 4;
-        blur_sigma = 2;
+    if (blur_radius == 0 || blur_sigma == 0 ) {
+        double fact = last_resolution[1] / 100.0;
+        blur_radius = (int)fact / 2;
+        blur_sigma = fact / 3.0;
+        if (debug_mode) {
+            fprintf(stderr, "scaling factor = %f\tradius = %d\tsigma = %f\n", fact, blur_radius, blur_sigma);
+        }
     }
 }
 
@@ -928,12 +932,15 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    if (fuzzy) {
+        init_blur_coefficents();
+    }
+
     /* Pixmap on which the image is rendered to (if any) */
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
 
     /* open the fullscreen window, already with the correct pixmap in place */
     if (fuzzy) {
-        init_blur_coefficents();
         win = open_overlay_window(conn, screen);
     }
     else {
