@@ -25,6 +25,10 @@ i3lock \- improved screen locker
 .IR color \|]
 .RB [\|\-t\|]
 .RB [\|\-f\|]
+.RB [\|\-r
+.IR radius\|]
+.RB [\|\-s
+.IR sigma\|]
 .RB [\|\-p
 .IR pointer\|]
 .RB [\|\-u\|]
@@ -104,6 +108,14 @@ If an image is specified (via \-i) it will display the image tiled all over the 
 .TP
 .B \-f, \-\-fuzzy
 Turns on the fuzzy mode. In this mode i3lock will blur your screen until you unlock it.
+
+.TP
+.BI \-r\  radius\fR,\ \fB\-\-radius= radius
+Uses this as the radius for the gaussian blur kernel.
+
+.TP
+.BI \-s\  sigma \fR,\ \fB\-\-sigma= sigma
+Uses this value as the sigma for calculating gaussian blur.
 
 .TP
 .BI \-p\  win|default \fR,\ \fB\-\-pointer= win|default
