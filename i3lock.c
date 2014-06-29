@@ -13,6 +13,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <xcb/xcb.h>
+#include <xcb/xkb.h>
 #include <xcb/dpms.h>
 #include <xcb/damage.h>
 #include <err.h>
@@ -23,9 +24,8 @@
 #include <string.h>
 #include <ev.h>
 #include <sys/mman.h>
-#include <X11/XKBlib.h>
-#include <X11/extensions/XKBfile.h>
 #include <xkbcommon/xkbcommon.h>
+#include <xkbcommon/xkbcommon-x11.h>
 #include <cairo.h>
 #include <cairo/cairo-xcb.h>
 
@@ -73,6 +73,8 @@ extern pam_state_t pam_state;
 static struct xkb_state *xkb_state;
 static struct xkb_context *xkb_context;
 static struct xkb_keymap *xkb_keymap;
+static uint8_t xkb_base_event;
+static uint8_t xkb_base_error;
 
 const xcb_query_extension_reply_t *dam_ext_data;
 
@@ -110,77 +112,35 @@ static void turn_monitors_off(void) {
  * Necessary so that we can properly let xkbcommon track the keyboard state and
  * translate keypresses to utf-8.
  *
- * Ideally, xkbcommon would ship something like this itself, but as of now
- * (version 0.2.0), it doesn’t.
- *
- * TODO: Once xcb-xkb is enabled by default and released, we should port this
- * code to xcb-xkb. See also https://github.com/xkbcommon/libxkbcommon/issues/1
- *
  */
 static bool load_keymap(void) {
-    bool ret = false;
-    XkbFileInfo result;
-    memset(&result, '\0', sizeof(result));
-    result.xkb = XkbGetKeyboard(display, XkbAllMapComponentsMask, XkbUseCoreKbd);
-    if (result.xkb == NULL) {
-        fprintf(stderr, "[i3lock] XKB: XkbGetKeyboard failed\n");
-        return false;
-    }
-
-    FILE *temp = tmpfile();
-    if (temp == NULL) {
-        fprintf(stderr, "[i3lock] could not create tempfile\n");
-        return false;
-    }
-
-    bool ok = XkbWriteXKBKeymap(temp, &result, false, false, NULL, NULL);
-    if (!ok) {
-        fprintf(stderr, "[i3lock] XkbWriteXKBKeymap failed\n");
-        goto out;
-    }
-
-    rewind(temp);
-
     if (xkb_context == NULL) {
         if ((xkb_context = xkb_context_new(0)) == NULL) {
             fprintf(stderr, "[i3lock] could not create xkbcommon context\n");
-            goto out;
+            return false;
         }
     }
 
-    if (xkb_keymap != NULL)
-        xkb_keymap_unref(xkb_keymap);
+    xkb_keymap_unref(xkb_keymap);
 
-    if ((xkb_keymap = xkb_keymap_new_from_file(xkb_context, temp, XKB_KEYMAP_FORMAT_TEXT_V1, 0)) == NULL) {
-        fprintf(stderr, "[i3lock] xkb_keymap_new_from_file failed\n");
-        goto out;
+    int32_t device_id = xkb_x11_get_core_keyboard_device_id(conn);
+    DEBUG("device = %d\n", device_id);
+    if ((xkb_keymap = xkb_x11_keymap_new_from_device(xkb_context, conn, device_id, 0)) == NULL) {
+        fprintf(stderr, "[i3lock] xkb_x11_keymap_new_from_device failed\n");
+        return false;
     }
 
-    struct xkb_state *new_state = xkb_state_new(xkb_keymap);
+    struct xkb_state *new_state =
+        xkb_x11_state_new_from_device(xkb_keymap, conn, device_id);
     if (new_state == NULL) {
-        fprintf(stderr, "[i3lock] xkb_state_new failed\n");
-        goto out;
+        fprintf(stderr, "[i3lock] xkb_x11_state_new_from_device failed\n");
+        return false;
     }
 
-    /* Get the initial modifier state to be in sync with the X server.
-     * See https://github.com/xkbcommon/libxkbcommon/issues/1 for why we ignore
-     * the base and latched fields. */
-    XkbStateRec state_rec;
-    XkbGetState(display, XkbUseCoreKbd, &state_rec);
-
-    xkb_state_update_mask(new_state,
-        0, 0, state_rec.locked_mods,
-        0, 0, state_rec.locked_group);
-
-    if (xkb_state != NULL)
-        xkb_state_unref(xkb_state);
+    xkb_state_unref(xkb_state);
     xkb_state = new_state;
 
-    ret = true;
-out:
-    XkbFreeKeyboard(result.xkb, XkbAllComponentsMask, true);
-    fclose(temp);
-    return ret;
+    return true;
 }
 
 /*
@@ -308,15 +268,6 @@ static void input_done(void) {
     }
 }
 
-/*
- * Called when the user releases a key. We need to leave the Mode_switch
- * state when the user releases the Mode_switch key.
- *
- */
-static void handle_key_release(xcb_key_release_event_t *event) {
-    xkb_state_update_key(xkb_state, event->detail, XKB_KEY_UP);
-}
-
 static void redraw_timeout(EV_P_ ev_timer *w, int revents) {
     redraw_unlock_indicator();
     redraw_screen();
@@ -347,7 +298,6 @@ static void handle_key_press(xcb_key_press_event_t *event) {
 
     ksym = xkb_state_key_get_one_sym(xkb_state, event->detail);
     ctrl = xkb_state_mod_name_is_active(xkb_state, "Control", XKB_STATE_MODS_DEPRESSED);
-    xkb_state_update_key(xkb_state, event->detail, XKB_KEY_DOWN);
 
     /* The buffer will be null-terminated, so n >= 2 for 1 actual character. */
     memset(buffer, '\0', sizeof(buffer));
@@ -488,11 +438,54 @@ static void handle_map_notify(xcb_map_notify_event_t *event) {
 /*
  * Called when the keyboard mapping changes. We update our symbols.
  *
+ * We ignore errors — if the new keymap cannot be loaded it’s better if the
+ * screen stays locked and the user intervenes by using killall i3lock.
+ *
  */
-static void handle_mapping_notify(xcb_mapping_notify_event_t *event) {
-    /* We ignore errors — if the new keymap cannot be loaded it’s better if the
-     * screen stays locked and the user intervenes by using killall i3lock. */
-    (void)load_keymap();
+static void process_xkb_event(xcb_generic_event_t *gevent) {
+    union xkb_event {
+        struct {
+            uint8_t response_type;
+            uint8_t xkbType;
+            uint16_t sequence;
+            xcb_timestamp_t time;
+            uint8_t deviceID;
+        } any;
+        xcb_xkb_new_keyboard_notify_event_t new_keyboard_notify;
+        xcb_xkb_map_notify_event_t map_notify;
+        xcb_xkb_state_notify_event_t state_notify;
+    } *event = (union xkb_event*)gevent;
+
+    DEBUG("process_xkb_event for device %d\n", event->any.deviceID);
+
+    if (event->any.deviceID != xkb_x11_get_core_keyboard_device_id(conn))
+        return;
+
+    /*
+     * XkbNewKkdNotify and XkbMapNotify together capture all sorts of keymap
+     * updates (e.g. xmodmap, xkbcomp, setxkbmap), with minimal redundent
+     * recompilations.
+     */
+    switch (event->any.xkbType) {
+        case XCB_XKB_NEW_KEYBOARD_NOTIFY:
+            if (event->new_keyboard_notify.changed & XCB_XKB_NKN_DETAIL_KEYCODES)
+                (void)load_keymap();
+            break;
+
+        case XCB_XKB_MAP_NOTIFY:
+            (void)load_keymap();
+            break;
+
+        case XCB_XKB_STATE_NOTIFY:
+            xkb_state_update_mask(xkb_state,
+                                  event->state_notify.baseMods,
+                                  event->state_notify.latchedMods,
+                                  event->state_notify.lockedMods,
+                                  event->state_notify.baseGroup,
+                                  event->state_notify.latchedGroup,
+                                  event->state_notify.lockedGroup);
+            break;
+    }
 }
 
 /*
@@ -653,14 +646,13 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
 
         /* Strip off the highest bit (set if the event is generated) */
         int type = (event->response_type & 0x7F);
+
         switch (type) {
             case XCB_KEY_PRESS:
                 handle_key_press((xcb_key_press_event_t*)event);
                 break;
 
             case XCB_KEY_RELEASE:
-                handle_key_release((xcb_key_release_event_t*)event);
-
                 /* If this was the backspace or escape key we are back at an
                  * empty input, so turn off the screen if DPMS is enabled, but
                  * only do that after some timeout: maybe user mistyped and
@@ -677,13 +669,13 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
                 handle_map_notify((xcb_map_notify_event_t*) event);
                 break;
 
-            case XCB_MAPPING_NOTIFY:
-                handle_mapping_notify((xcb_mapping_notify_event_t*)event);
-                break;
-
             case XCB_CONFIGURE_NOTIFY:
                 handle_screen_resize();
                 break;
+
+            default:
+                if (type == xkb_base_event)
+                    process_xkb_event(event);
         }
 
         free(event);
@@ -888,10 +880,43 @@ int main(int argc, char *argv[]) {
         errx(EXIT_FAILURE, "Could not connect to X11, maybe you need to set DISPLAY?");
     XSetEventQueueOwner(display, XCBOwnsEventQueue);
     conn = XGetXCBConnection(display);
-
     /* Double checking that connection is good and operatable with xcb */
-    if (xcb_connection_has_error(conn))
+    if ( xcb_connection_has_error(conn))
         errx(EXIT_FAILURE, "Could not connect to X11, maybe you need to set DISPLAY?");
+
+    if (xkb_x11_setup_xkb_extension(conn,
+            XKB_X11_MIN_MAJOR_XKB_VERSION,
+            XKB_X11_MIN_MINOR_XKB_VERSION,
+            0,
+            NULL,
+            NULL,
+            &xkb_base_event,
+            &xkb_base_error) != 1)
+        errx(EXIT_FAILURE, "Could not setup XKB extension.");
+
+    static const xcb_xkb_map_part_t required_map_parts =
+        (XCB_XKB_MAP_PART_KEY_TYPES |
+         XCB_XKB_MAP_PART_KEY_SYMS |
+         XCB_XKB_MAP_PART_MODIFIER_MAP |
+         XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS |
+         XCB_XKB_MAP_PART_KEY_ACTIONS |
+         XCB_XKB_MAP_PART_VIRTUAL_MODS |
+         XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP);
+
+    static const xcb_xkb_event_type_t required_events =
+        (XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY |
+         XCB_XKB_EVENT_TYPE_MAP_NOTIFY |
+         XCB_XKB_EVENT_TYPE_STATE_NOTIFY);
+
+    xcb_xkb_select_events(
+        conn,
+        xkb_x11_get_core_keyboard_device_id(conn),
+        required_events,
+        0,
+        required_events,
+        required_map_parts,
+        required_map_parts,
+        0);
 
     /* When we cannot initially load the keymap, we better exit */
     if (!load_keymap())
