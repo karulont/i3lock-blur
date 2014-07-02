@@ -57,7 +57,7 @@ static const char *VERT_SHADER =
     "v_Coordinates = vec2(gl_MultiTexCoord0);\n"
 "}\n";
 static const char *FRAG_SHADER_P1 =
-"#version 130\n"
+"#version 120\n"
 "varying vec2 v_Coordinates;\n"
  
 "uniform vec2 u_Scale;\n"

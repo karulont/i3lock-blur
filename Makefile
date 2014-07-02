@@ -10,7 +10,6 @@ endif
 CFLAGS += -std=c99
 CFLAGS += -pipe
 CFLAGS += -Wall
-CFLAGS += -g
 CPPFLAGS += -D_GNU_SOURCE
 CFLAGS += $(shell pkg-config --cflags cairo xcb-dpms xcb-xinerama xcb-atom xcb-image xcb-xkb xcb-composite xcb-damage xkbcommon xkbcommon-x11 x11 x11-xcb gl)
 LIBS += $(shell pkg-config --libs cairo xcb-dpms xcb-xinerama xcb-atom xcb-image xcb-xkb xcb-composite xcb-damage xkbcommon xkbcommon-x11 x11 x11-xcb gl)
@@ -21,7 +20,7 @@ LIBS += -lm
 FILES:=$(wildcard *.c)
 FILES:=$(FILES:.c=.o)
 
-VERSION:=$(shell git describe --tags --abbrev=0)
+VERSION:=$(shell git describe --tags --abbrev=0 --always)
 GIT_VERSION:="$(shell git describe --tags --always) ($(shell git log --pretty=format:%cd --date=short -n1))"
 CPPFLAGS += -DVERSION=\"${GIT_VERSION}\"
 
