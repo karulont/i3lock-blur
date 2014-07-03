@@ -33,6 +33,7 @@ Requirements
 - libx11-xcb-dev
 - libxkbfile-dev
 - libxkbcommon >= 0.2.0
+- libxkbcommon-x11
 - libGL
 
 Install packages in Ubuntu
