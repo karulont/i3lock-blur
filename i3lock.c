@@ -1022,5 +1022,16 @@ int main(int argc, char *argv[]) {
      * received up until now. ev will only pick up new events (when the X11
      * file descriptor becomes readable). */
     ev_invoke(main_loop, xcb_check, 0);
+    /* usually fork is called from mapnotify event handler, but in our case
+     * a new window is not created and so the mapnotify event doesn't come */
+    if (fuzzy && !dont_fork) {
+        dont_fork = true;
+
+        /* In the parent process, we exit */
+        if (fork() != 0)
+            exit(0);
+
+        ev_loop_fork(EV_DEFAULT);
+    }
     ev_loop(main_loop, 0);
 }
