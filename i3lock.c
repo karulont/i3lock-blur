@@ -69,6 +69,8 @@ static struct ev_timer *dpms_timeout;
 static struct ev_timer *discard_passwd_timeout;
 extern unlock_state_t unlock_state;
 extern pam_state_t pam_state;
+int failed_attempts = 0;
+bool show_failed_attempts = false;
 
 static struct xkb_state *xkb_state;
 static struct xkb_context *xkb_context;
@@ -249,6 +251,7 @@ static void input_done(void) {
         fprintf(stderr, "Authentication failure\n");
 
     pam_state = STATE_PAM_WRONG;
+    failed_attempts += 1;
     clear_input();
     redraw_unlock_indicator();
 
@@ -617,6 +620,9 @@ static void set_up_damage_notifications(xcb_connection_t *conn, xcb_screen_t* sc
 static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
     xcb_generic_event_t *event;
 
+    if (xcb_connection_has_error(conn))
+        errx(EXIT_FAILURE, "X11 connection broke, did your server terminate?\n");
+
     while ((event = xcb_poll_for_event(conn)) != NULL) {
         if (event->response_type == 0) {
             xcb_generic_error_t *error = (xcb_generic_error_t*)event;
@@ -775,13 +781,14 @@ int main(int argc, char *argv[]) {
         {"sigma", required_argument, NULL, 's'},
         {"ignore-empty-password", no_argument, NULL, 'e'},
         {"inactivity-timeout", required_argument, NULL, 'I'},
+        {"show-failed-attempts", no_argument, NULL, 'f'},
         {NULL, no_argument, NULL, 0}
     };
 
     if ((username = getenv("USER")) == NULL)
         errx(EXIT_FAILURE, "USER environment variable not set, please set it.\n");
 
-    char *optstring = "hvnbdc:p:ui:tfr:s:eI:";
+    char *optstring = "hvnbdc:p:ui:tfr:s:eI:l";
     while ((o = getopt_long(argc, argv, optstring, longopts, &optind)) != -1) {
         switch (o) {
         case 'v':
@@ -848,9 +855,12 @@ int main(int argc, char *argv[]) {
             if (strcmp(longopts[optind].name, "debug") == 0)
                 debug_mode = true;
             break;
+        case 'l':
+            show_failed_attempts = true;
+            break;
         default:
             errx(EXIT_FAILURE, "Syntax: i3lock [-v] [-n] [-b] [-d] [-c color] [-u] [-p win|default]"
-            " [-i image.png] [-t] [-f] [-r radius] [-s sigma] [-e] [-I]"
+            " [-i image.png] [-t] [-f] [-r radius] [-s sigma] [-e] [-I] [-l]"
             );
         }
     }

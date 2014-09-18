@@ -34,6 +34,7 @@ i3lock \- improved screen locker
 .RB [\|\-u\|]
 .RB [\|\-e\|]
 .RB [\|\-I\|]
+.RB [\|\-l\|]
 
 .SH DESCRIPTION
 .B i3lock
@@ -44,7 +45,7 @@ entering your password.
 .SH IMPROVEMENTS
 
 
-.IP \[bu] 2
+.IP \[bu]
 Fuzzy option added. With that there is no image or solid color displayed when screen is locked. A blurring filter is applied to the screen.
 .IP \[bu]
 i3lock forks, so you can combine it with an alias to suspend to RAM (run "i3lock && echo mem > /sys/power/state" to get a locked screen after waking up your computer from suspend to RAM)
@@ -134,6 +135,10 @@ and, if invalid, the user will have to wait a few seconds before
 another try. This can be useful if the XF86ScreenSaver key is used to
 put a laptop to sleep and bounce on resume or if you happen to wake up
 your computer with the enter key.
+
+.TP
+.B \-l, \-\-show-failed-attempts
+Show the number of failed attempts, if any.
 
 .SH SEE ALSO
 .IR xautolock(1)
