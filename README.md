@@ -47,4 +47,5 @@ press enter.
 
 Upstream
 --------
-Please submit pull requests to https://github.com/i3/i3lock
+Please submit general pull requests to https://github.com/i3/i3lock
+Everything related to blurring mode should be submitted to https://github.com/karulont/i3lock-blur
