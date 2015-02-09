@@ -1,4 +1,5 @@
 #define GL_GLEXT_PROTOTYPES
+#include <err.h>
 #include <GL/gl.h>
 #include <GL/glx.h>
 #include <GL/glext.h>
@@ -159,8 +160,8 @@ XVisualInfo *vis;
 GLuint shader_prog;
 GLuint v_shader;
 GLuint f_shader;
-static PFNGLXBINDTEXIMAGEEXTPROC glXBindTexImageEXT = NULL;
-static PFNGLXRELEASETEXIMAGEEXTPROC glXReleaseTexImageEXT = NULL;
+static PFNGLXBINDTEXIMAGEEXTPROC glXBindTexImageEXT_f = NULL;
+static PFNGLXRELEASETEXIMAGEEXTPROC glXReleaseTexImageEXT_f = NULL;
 const int pixmap_config[] = {
     GLX_BIND_TO_TEXTURE_RGBA_EXT, True,
     GLX_DRAWABLE_TYPE, GLX_PIXMAP_BIT,
@@ -181,11 +182,18 @@ void glx_init(int scr, int w, int h, int radius, float sigma) {
     vis = glXGetVisualFromFBConfig(display, configs[0]);
     ctx = glXCreateContext(display, vis, NULL, True);
 
-    glXBindTexImageEXT = (PFNGLXBINDTEXIMAGEEXTPROC)
+    glXBindTexImageEXT_f = (PFNGLXBINDTEXIMAGEEXTPROC)
         glXGetProcAddress((GLubyte *) "glXBindTexImageEXT"); 
-    glXReleaseTexImageEXT = (PFNGLXRELEASETEXIMAGEEXTPROC)
+    if (glXBindTexImageEXT_f == NULL) {
+        errx(EXIT_FAILURE, "Failed to load extension glXBindTexImageEXT.\n");
+    }
+
+    glXReleaseTexImageEXT_f = (PFNGLXRELEASETEXIMAGEEXTPROC)
         glXGetProcAddress((GLubyte *) "glXReleaseTexImageEXT"); 
 
+    if (glXReleaseTexImageEXT_f == NULL) {
+        errx(EXIT_FAILURE, "Failed to load extension glXReleaseTexImageEXT.\n");
+    }
 
     tmp = XCreatePixmap(display, RootWindow(display, vis->screen), w, h, vis->depth);
     glx_tmp = glXCreatePixmap(display, configs[0], tmp, pixmap_attribs);
@@ -270,9 +278,11 @@ void blur_image_gl(int scr, Pixmap pixmap, int width, int height, int radius, fl
         }
         glEnable(GL_TEXTURE_2D);
         if (i==0) {
-            glXBindTexImageEXT(display, glx_pixmap, GLX_FRONT_EXT, NULL);
+            glXBindTexImageEXT_f(display, glx_pixmap, GLX_FRONT_EXT, NULL);
         } else {
-            glXBindTexImageEXT(display, (i & 1) == 1 ? glx_tmp : glx_tmp1, GLX_FRONT_EXT, NULL);
+            glXBindTexImageEXT_f(display,
+                    (i & 1) == 1 ? glx_tmp : glx_tmp1,
+                    GLX_FRONT_EXT, NULL);
         }
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -308,6 +318,14 @@ void blur_image_gl(int scr, Pixmap pixmap, int width, int height, int radius, fl
         glTexCoord2f(0.0, 1.0); glVertex2f(-1.0, -1.0);
         glEnd(); 
         glFlush();
+
+        if (i==0) {
+            glXReleaseTexImageEXT_f(display, glx_pixmap, GLX_FRONT_EXT);
+        } else {
+            glXReleaseTexImageEXT_f(display,
+                    (i & 1) == 1 ? glx_tmp : glx_tmp1,
+                    GLX_FRONT_EXT);
+        }
     }
     GC gc = XCreateGC(display, pixmap, 0, NULL);
     XCopyArea(display, tmp1, pixmap, gc, 0, 0, width, height, 0, 0);
