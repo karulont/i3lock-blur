@@ -1,7 +1,7 @@
 /*
  * vim:ts=4:sw=4:expandtab
  *
- * © 2010-2014 Michael Stapelberg
+ * © 2010 Michael Stapelberg
  *
  * See LICENSE for licensing information
  *
@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include <xcb/xcb.h>
 #include <ev.h>
@@ -46,6 +47,9 @@ uint32_t button_diameter_physical;
 
 /* Whether the unlock indicator is enabled (defaults to true). */
 extern bool unlock_indicator;
+
+/* List of pressed modifiers, or NULL if none are pressed. */
+extern char *modifier_string;
 
 /* A Cairo surface containing the specified image (-i), if any. */
 extern cairo_surface_t *img;
@@ -129,10 +133,10 @@ static void draw_unlock_indicator() {
          * (currently verifying, wrong password, or default) */
         switch (pam_state) {
             case STATE_PAM_VERIFY:
-                cairo_set_source_rgba(ctx, 0, 114.0/255, 255.0/255, 0.75);
+                cairo_set_source_rgba(ctx, 0, 114.0 / 255, 255.0 / 255, 0.75);
                 break;
             case STATE_PAM_WRONG:
-                cairo_set_source_rgba(ctx, 250.0/255, 0, 0, 0.75);
+                cairo_set_source_rgba(ctx, 250.0 / 255, 0, 0, 0.75);
                 break;
             default:
                 cairo_set_source_rgba(ctx, 0, 0, 0, 0.75);
@@ -142,13 +146,13 @@ static void draw_unlock_indicator() {
 
         switch (pam_state) {
             case STATE_PAM_VERIFY:
-                cairo_set_source_rgb(ctx, 51.0/255, 0, 250.0/255);
+                cairo_set_source_rgb(ctx, 51.0 / 255, 0, 250.0 / 255);
                 break;
             case STATE_PAM_WRONG:
-                cairo_set_source_rgb(ctx, 125.0/255, 51.0/255, 0);
+                cairo_set_source_rgb(ctx, 125.0 / 255, 51.0 / 255, 0);
                 break;
             case STATE_PAM_IDLE:
-                cairo_set_source_rgb(ctx, 51.0/255, 125.0/255, 0);
+                cairo_set_source_rgb(ctx, 51.0 / 255, 125.0 / 255, 0);
                 break;
         }
         cairo_stroke(ctx);
@@ -181,7 +185,7 @@ static void draw_unlock_indicator() {
                 text = "wrong!";
                 break;
             default:
-                if (show_failed_attempts && failed_attempts > 0){
+                if (show_failed_attempts && failed_attempts > 0) {
                     if (failed_attempts > 999) {
                         text = "> 999";
                     } else {
@@ -207,6 +211,21 @@ static void draw_unlock_indicator() {
             cairo_close_path(ctx);
         }
 
+        if (pam_state == STATE_PAM_WRONG && (modifier_string != NULL)) {
+            cairo_text_extents_t extents;
+            double x, y;
+
+            cairo_set_font_size(ctx, 14.0);
+
+            cairo_text_extents(ctx, modifier_string, &extents);
+            x = BUTTON_CENTER - ((extents.width / 2) + extents.x_bearing);
+            y = BUTTON_CENTER - ((extents.height / 2) + extents.y_bearing) + 28.0;
+
+            cairo_move_to(ctx, x, y);
+            cairo_show_text(ctx, modifier_string);
+            cairo_close_path(ctx);
+        }
+
         /* After the user pressed any valid key or the backspace key, we
          * highlight a random part of the unlock indicator to confirm this
          * keypress. */
@@ -222,10 +241,10 @@ static void draw_unlock_indicator() {
                       highlight_start + (M_PI / 3.0));
             if (unlock_state == STATE_KEY_ACTIVE) {
                 /* For normal keys, we use a lighter green. */
-                cairo_set_source_rgb(ctx, 51.0/255, 219.0/255, 0);
+                cairo_set_source_rgb(ctx, 51.0 / 255, 219.0 / 255, 0);
             } else {
                 /* For backspace, we use red. */
-                cairo_set_source_rgb(ctx, 219.0/255, 51.0/255, 0);
+                cairo_set_source_rgb(ctx, 219.0 / 255, 51.0 / 255, 0);
             }
             cairo_stroke(ctx);
 
@@ -356,7 +375,7 @@ void redraw_screen(void) {
     }
 
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
-    xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXMAP, (uint32_t[1]){ bg_pixmap });
+    xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXMAP, (uint32_t[1]){bg_pixmap});
     /* XXX: Possible optimization: Only update the area in the middle of the
      * screen instead of the whole screen. */
     xcb_clear_area(conn, 0, win, 0, 0, last_resolution[0], last_resolution[1]);
@@ -381,7 +400,8 @@ void redraw_unlock_indicator(void) {
 void clear_indicator(void) {
     if (input_position == 0) {
         unlock_state = STATE_STARTED;
-    } else unlock_state = STATE_KEY_PRESSED;
+    } else 
+        unlock_state = STATE_KEY_PRESSED;
     redraw_unlock_indicator();
 }
 

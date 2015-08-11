@@ -1,7 +1,7 @@
 /*
  * vim:ts=4:sw=4:expandtab
  *
- * © 2010-2012 Michael Stapelberg
+ * © 2010 Michael Stapelberg
  *
  * xcb.c: contains all functions which use XCB to talk to X11. Mostly wrappers
  *        around the rather complicated/ugly parts of the XCB API.
@@ -30,25 +30,25 @@ xcb_screen_t *screen;
 #define curs_invisible_height 8
 
 static unsigned char curs_invisible_bits[] = {
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 
 #define curs_windows_width 11
 #define curs_windows_height 19
 
 static unsigned char curs_windows_bits[] = {
- 0xfe, 0x07, 0xfc, 0x07, 0xfa, 0x07, 0xf6, 0x07, 0xee, 0x07, 0xde, 0x07,
- 0xbe, 0x07, 0x7e, 0x07, 0xfe, 0x06, 0xfe, 0x05, 0x3e, 0x00, 0xb6, 0x07,
- 0x6a, 0x07, 0x6c, 0x07, 0xde, 0x06, 0xdf, 0x06, 0xbf, 0x05, 0xbf, 0x05,
- 0x7f, 0x06 };
+    0xfe, 0x07, 0xfc, 0x07, 0xfa, 0x07, 0xf6, 0x07, 0xee, 0x07, 0xde, 0x07,
+    0xbe, 0x07, 0x7e, 0x07, 0xfe, 0x06, 0xfe, 0x05, 0x3e, 0x00, 0xb6, 0x07,
+    0x6a, 0x07, 0x6c, 0x07, 0xde, 0x06, 0xdf, 0x06, 0xbf, 0x05, 0xbf, 0x05,
+    0x7f, 0x06};
 
 #define mask_windows_width 11
 #define mask_windows_height 19
 
 static unsigned char mask_windows_bits[] = {
- 0x01, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0f, 0x00, 0x1f, 0x00, 0x3f, 0x00,
- 0x7f, 0x00, 0xff, 0x00, 0xff, 0x01, 0xff, 0x03, 0xff, 0x07, 0x7f, 0x00,
- 0xf7, 0x00, 0xf3, 0x00, 0xe1, 0x01, 0xe0, 0x01, 0xc0, 0x03, 0xc0, 0x03,
- 0x80, 0x01 };
+    0x01, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0f, 0x00, 0x1f, 0x00, 0x3f, 0x00,
+    0x7f, 0x00, 0xff, 0x00, 0xff, 0x01, 0xff, 0x03, 0xff, 0x07, 0x7f, 0x00,
+    0xf7, 0x00, 0xf3, 0x00, 0xe1, 0x01, 0xe0, 0x01, 0xc0, 0x03, 0xc0, 0x03,
+    0x80, 0x01};
 
 static uint32_t get_colorpixel(char *hex) {
     char strgroups[3][3] = {{hex[0], hex[1], '\0'},
@@ -69,7 +69,6 @@ xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen) {
     for (depth_iter = xcb_screen_allowed_depths_iterator(screen);
          depth_iter.rem;
          xcb_depth_next(&depth_iter)) {
-
         for (visual_iter = xcb_depth_visuals_iterator(depth_iter.data);
              visual_iter.rem;
              xcb_visualtype_next(&visual_iter)) {
@@ -154,9 +153,9 @@ xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
     /* Generate a Graphics Context and fill the pixmap with background color
      * (for images that are smaller than your screen) */
     xcb_gcontext_t gc = xcb_generate_id(conn);
-    uint32_t values[] = { get_colorpixel(color) };
+    uint32_t values[] = {get_colorpixel(color)};
     xcb_create_gc(conn, gc, bg_pixmap, XCB_GC_FOREGROUND, values);
-    xcb_rectangle_t rect = { 0, 0, resolution[0], resolution[1] };
+    xcb_rectangle_t rect = {0, 0, resolution[0], resolution[1]};
     xcb_poly_fill_rectangle(conn, bg_pixmap, gc, 1, &rect);
     xcb_free_gc(conn, gc);
 
@@ -209,12 +208,12 @@ xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, c
 
     xcb_create_window(conn,
                       XCB_COPY_FROM_PARENT,
-                      win, /* the window id */
+                      win,       /* the window id */
                       scr->root, /* parent == root */
                       0, 0,
                       scr->width_in_pixels,
                       scr->height_in_pixels, /* dimensions */
-                      0, /* border = 0, we draw our own */
+                      0,                     /* border = 0, we draw our own */
                       XCB_WINDOW_CLASS_INPUT_OUTPUT,
                       XCB_WINDOW_CLASS_COPY_FROM_PARENT, /* copy visual from parent */
                       mask,
@@ -241,16 +240,6 @@ xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, c
 }
 
 /*
- * Set the dpms level to 'mode'.
- *
- */
-void dpms_set_mode(xcb_connection_t *conn, xcb_dpms_dpms_mode_t mode) {
-    xcb_dpms_enable(conn);
-    xcb_dpms_force_level(conn, mode);
-    xcb_flush(conn);
-}
-
-/*
  * Repeatedly tries to grab pointer and keyboard (up to 1000 times).
  *
  */
@@ -273,8 +262,7 @@ void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen, xcb
             XCB_GRAB_MODE_ASYNC, /* keyboard mode */
             XCB_NONE,            /* confine_to = in which window should the cursor stay */
             cursor,              /* we change the cursor to whatever the user wanted */
-            XCB_CURRENT_TIME
-        );
+            XCB_CURRENT_TIME);
 
         if ((preply = xcb_grab_pointer_reply(conn, pcookie, NULL)) &&
             preply->status == XCB_GRAB_STATUS_SUCCESS) {
@@ -289,12 +277,11 @@ void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen, xcb
     while (tries-- > 0) {
         kcookie = xcb_grab_keyboard(
             conn,
-            true,                /* report events */
-            screen->root,        /* grab the root window */
+            true,         /* report events */
+            screen->root, /* grab the root window */
             XCB_CURRENT_TIME,
             XCB_GRAB_MODE_ASYNC, /* process events as normal, do not require sync */
-            XCB_GRAB_MODE_ASYNC
-        );
+            XCB_GRAB_MODE_ASYNC);
 
         if ((kreply = xcb_grab_keyboard_reply(conn, kcookie, NULL)) &&
             kreply->status == XCB_GRAB_STATUS_SUCCESS) {
@@ -315,8 +302,8 @@ xcb_cursor_t create_cursor(xcb_connection_t *conn, xcb_screen_t *screen, xcb_win
     xcb_pixmap_t mask;
     xcb_cursor_t cursor;
 
-    unsigned char* curs_bits;
-    unsigned char* mask_bits;
+    unsigned char *curs_bits;
+    unsigned char *mask_bits;
     int curs_w, curs_h;
 
     switch (choice) {
@@ -363,9 +350,9 @@ xcb_cursor_t create_cursor(xcb_connection_t *conn, xcb_screen_t *screen, xcb_win
                       cursor,
                       bitmap,
                       mask,
-                      65535,65535,65535,
-                      0,0,0,
-                      0,0);
+                      65535, 65535, 65535,
+                      0, 0, 0,
+                      0, 0);
 
     xcb_free_pixmap(conn, bitmap);
     xcb_free_pixmap(conn, mask);
