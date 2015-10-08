@@ -827,7 +827,7 @@ static void init_blur_coefficents() {
     if (blur_radius == 0 || blur_sigma == 0 ) {
         double fact = last_resolution[1] / 100.0;
         blur_radius = (int)fact / 2;
-        blur_sigma = fact / 3.0;
+        blur_sigma = fact / 2.0;
         if (debug_mode) {
             fprintf(stderr, "scaling factor = %f\tradius = %d\tsigma = %f\n", fact, blur_radius, blur_sigma);
         }
