@@ -114,6 +114,8 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
         geos[i] = xcb_get_geometry(conn, children[i]);
     }
 
+    /* Copy root window background to final_pixmap */
+    xcb_copy_area(conn, scr->root, final_pixmap, gc, 0, 0, 0, 0, resolution[0], resolution[1]);
 
     for (int i=0;i < reply->children_len; ++i) {
         /* Get attributes to check if input-only window */
