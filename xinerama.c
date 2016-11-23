@@ -6,10 +6,10 @@
  * See LICENSE for licensing information
  *
  */
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
 #include <math.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <xcb/xcb.h>
 #include <xcb/xinerama.h>
 

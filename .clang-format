@@ -6,5 +6,5 @@ AllowShortBlocksOnASingleLine: false
 AlwaysBreakBeforeMultilineStrings: false
 IndentWidth: 4
 PointerBindsToType: false
-ColumnLimit: 0
+ColumnLimit: 80
 SpaceBeforeParens: ControlStatements

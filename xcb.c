@@ -7,21 +7,21 @@
  *        around the rather complicated/ugly parts of the XCB API.
  *
  */
-#include <xcb/xcb.h>
-#include <xcb/xcb_image.h>
-#include <xcb/xcb_atom.h>
-#include <xcb/composite.h>
-#include <xcb/dpms.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <unistd.h>
 #include <assert.h>
 #include <err.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <xcb/composite.h>
+#include <xcb/dpms.h>
+#include <xcb/xcb.h>
+#include <xcb/xcb_atom.h>
+#include <xcb/xcb_image.h>
 
-#include "xcb.h"
 #include "cursors.h"
+#include "xcb.h"
 
 xcb_connection_t *conn;
 xcb_screen_t *screen;
@@ -29,31 +29,30 @@ xcb_screen_t *screen;
 #define curs_invisible_width 8
 #define curs_invisible_height 8
 
-static unsigned char curs_invisible_bits[] = {
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+static unsigned char curs_invisible_bits[] = {0x00, 0x00, 0x00, 0x00,
+                                              0x00, 0x00, 0x00, 0x00};
 
 #define curs_windows_width 11
 #define curs_windows_height 19
 
 static unsigned char curs_windows_bits[] = {
-    0xfe, 0x07, 0xfc, 0x07, 0xfa, 0x07, 0xf6, 0x07, 0xee, 0x07, 0xde, 0x07,
-    0xbe, 0x07, 0x7e, 0x07, 0xfe, 0x06, 0xfe, 0x05, 0x3e, 0x00, 0xb6, 0x07,
-    0x6a, 0x07, 0x6c, 0x07, 0xde, 0x06, 0xdf, 0x06, 0xbf, 0x05, 0xbf, 0x05,
-    0x7f, 0x06};
+    0xfe, 0x07, 0xfc, 0x07, 0xfa, 0x07, 0xf6, 0x07, 0xee, 0x07,
+    0xde, 0x07, 0xbe, 0x07, 0x7e, 0x07, 0xfe, 0x06, 0xfe, 0x05,
+    0x3e, 0x00, 0xb6, 0x07, 0x6a, 0x07, 0x6c, 0x07, 0xde, 0x06,
+    0xdf, 0x06, 0xbf, 0x05, 0xbf, 0x05, 0x7f, 0x06};
 
 #define mask_windows_width 11
 #define mask_windows_height 19
 
 static unsigned char mask_windows_bits[] = {
-    0x01, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0f, 0x00, 0x1f, 0x00, 0x3f, 0x00,
-    0x7f, 0x00, 0xff, 0x00, 0xff, 0x01, 0xff, 0x03, 0xff, 0x07, 0x7f, 0x00,
-    0xf7, 0x00, 0xf3, 0x00, 0xe1, 0x01, 0xe0, 0x01, 0xc0, 0x03, 0xc0, 0x03,
-    0x80, 0x01};
+    0x01, 0x00, 0x03, 0x00, 0x07, 0x00, 0x0f, 0x00, 0x1f, 0x00,
+    0x3f, 0x00, 0x7f, 0x00, 0xff, 0x00, 0xff, 0x01, 0xff, 0x03,
+    0xff, 0x07, 0x7f, 0x00, 0xf7, 0x00, 0xf3, 0x00, 0xe1, 0x01,
+    0xe0, 0x01, 0xc0, 0x03, 0xc0, 0x03, 0x80, 0x01};
 
 static uint32_t get_colorpixel(char *hex) {
-    char strgroups[3][3] = {{hex[0], hex[1], '\0'},
-                            {hex[2], hex[3], '\0'},
-                            {hex[4], hex[5], '\0'}};
+    char strgroups[3][3] = {
+        {hex[0], hex[1], '\0'}, {hex[2], hex[3], '\0'}, {hex[4], hex[5], '\0'}};
     uint32_t rgb16[3] = {(strtol(strgroups[0], NULL, 16)),
                          (strtol(strgroups[1], NULL, 16)),
                          (strtol(strgroups[2], NULL, 16))};
@@ -67,11 +66,9 @@ xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen) {
     xcb_visualtype_iterator_t visual_iter;
 
     for (depth_iter = xcb_screen_allowed_depths_iterator(screen);
-         depth_iter.rem;
-         xcb_depth_next(&depth_iter)) {
+         depth_iter.rem; xcb_depth_next(&depth_iter)) {
         for (visual_iter = xcb_depth_visuals_iterator(depth_iter.data);
-             visual_iter.rem;
-             xcb_visualtype_next(&visual_iter)) {
+             visual_iter.rem; xcb_visualtype_next(&visual_iter)) {
             if (screen->root_visual != visual_iter.data->visual_id)
                 continue;
 
@@ -83,43 +80,47 @@ xcb_visualtype_t *get_root_visual_type(xcb_screen_t *screen) {
     return NULL;
 }
 
-xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution, char *color);
+xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr,
+                              u_int32_t *resolution, char *color);
 
-xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution) {
+xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr,
+                              u_int32_t *resolution) {
     /* Generate a big enough pixmap */
     xcb_pixmap_t final_pixmap = xcb_generate_id(conn);
     xcb_create_pixmap(conn, scr->root_depth, final_pixmap, scr->root,
-                        resolution[0], resolution[1]);
-    xcb_gcontext_t gc=xcb_generate_id(conn);
+                      resolution[0], resolution[1]);
+    xcb_gcontext_t gc = xcb_generate_id(conn);
     const uint32_t gc_values[] = {1};
-    xcb_create_gc(conn, gc, screen->root, XCB_GC_SUBWINDOW_MODE , gc_values);
+    xcb_create_gc(conn, gc, screen->root, XCB_GC_SUBWINDOW_MODE, gc_values);
 
     /* Iterate over all root window children */
-    xcb_query_tree_reply_t* reply = xcb_query_tree_reply(conn,
-                                    xcb_query_tree(conn,scr->root), NULL);
+    xcb_query_tree_reply_t *reply =
+        xcb_query_tree_reply(conn, xcb_query_tree(conn, scr->root), NULL);
     xcb_window_t *children = xcb_query_tree_children(reply);
-    xcb_get_window_attributes_cookie_t *attribs = 
-        (xcb_get_window_attributes_cookie_t*) malloc(sizeof
-                (xcb_get_window_attributes_cookie_t)*reply->children_len);
-    xcb_get_geometry_cookie_t *geos = (xcb_get_geometry_cookie_t*)
-        malloc(sizeof(xcb_get_geometry_cookie_t)*reply->children_len);
+    xcb_get_window_attributes_cookie_t *attribs =
+        (xcb_get_window_attributes_cookie_t *)malloc(
+            sizeof(xcb_get_window_attributes_cookie_t) * reply->children_len);
+    xcb_get_geometry_cookie_t *geos = (xcb_get_geometry_cookie_t *)malloc(
+        sizeof(xcb_get_geometry_cookie_t) * reply->children_len);
 
     if (!attribs || !geos) {
         goto END;
     }
 
-    for (int i=0;i < reply->children_len; ++i) {
+    for (int i = 0; i < reply->children_len; ++i) {
         /* Get attributes to check if input-only window */
         attribs[i] = xcb_get_window_attributes(conn, children[i]);
         geos[i] = xcb_get_geometry(conn, children[i]);
     }
 
     /* Copy root window background to final_pixmap */
-    xcb_copy_area(conn, scr->root, final_pixmap, gc, 0, 0, 0, 0, resolution[0], resolution[1]);
+    xcb_copy_area(conn, scr->root, final_pixmap, gc, 0, 0, 0, 0, resolution[0],
+                  resolution[1]);
 
-    for (int i=0;i < reply->children_len; ++i) {
+    for (int i = 0; i < reply->children_len; ++i) {
         /* Get attributes to check if input-only window */
-        xcb_get_window_attributes_reply_t *attrib = xcb_get_window_attributes_reply(conn, attribs[i], NULL);
+        xcb_get_window_attributes_reply_t *attrib =
+            xcb_get_window_attributes_reply(conn, attribs[i], NULL);
 
         /* If attributes are NULL then the window was destroyed */
         if (!attrib) {
@@ -133,8 +134,10 @@ xcb_pixmap_t create_fg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
         free(attrib);
 
         /* Copy area to final_pixmap */
-        xcb_get_geometry_reply_t *geo = xcb_get_geometry_reply(conn, geos[i], NULL);
-        xcb_copy_area(conn, children[i], final_pixmap, gc, 0, 0, geo->x, geo->y, geo->width, geo->height);
+        xcb_get_geometry_reply_t *geo =
+            xcb_get_geometry_reply(conn, geos[i], NULL);
+        xcb_copy_area(conn, children[i], final_pixmap, gc, 0, 0, geo->x, geo->y,
+                      geo->width, geo->height);
         free(geo);
     }
     free(geos);
@@ -147,7 +150,8 @@ END:
     return final_pixmap;
 }
 
-xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32_t* resolution, char *color) {
+xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr,
+                              u_int32_t *resolution, char *color) {
     xcb_pixmap_t bg_pixmap = xcb_generate_id(conn);
     xcb_create_pixmap(conn, scr->root_depth, bg_pixmap, scr->root,
                       resolution[0], resolution[1]);
@@ -165,27 +169,32 @@ xcb_pixmap_t create_bg_pixmap(xcb_connection_t *conn, xcb_screen_t *scr, u_int32
 }
 
 xcb_window_t open_overlay_window(xcb_connection_t *conn, xcb_screen_t *scr) {
-
-    xcb_composite_query_version_reply_t * ver_reply =
-        xcb_composite_query_version_reply(conn,xcb_composite_query_version(conn, XCB_COMPOSITE_MAJOR_VERSION, XCB_COMPOSITE_MINOR_VERSION), NULL);
-    xcb_composite_get_overlay_window_reply_t *comp_win_reply = 
-        xcb_composite_get_overlay_window_reply(conn, 
-                xcb_composite_get_overlay_window(conn, scr->root), NULL);
+    xcb_composite_query_version_reply_t *ver_reply =
+        xcb_composite_query_version_reply(
+            conn, xcb_composite_query_version(conn, XCB_COMPOSITE_MAJOR_VERSION,
+                                              XCB_COMPOSITE_MINOR_VERSION),
+            NULL);
+    xcb_composite_get_overlay_window_reply_t *comp_win_reply =
+        xcb_composite_get_overlay_window_reply(
+            conn, xcb_composite_get_overlay_window(conn, scr->root), NULL);
 
     xcb_window_t win = comp_win_reply->overlay_win;
     free(ver_reply);
     free(comp_win_reply);
 
-    xcb_composite_redirect_subwindows(conn, scr->root, 
-            XCB_COMPOSITE_REDIRECT_AUTOMATIC);
+    xcb_composite_redirect_subwindows(conn, scr->root,
+                                      XCB_COMPOSITE_REDIRECT_AUTOMATIC);
 
-    xcb_change_window_attributes(conn, scr->root, XCB_CW_EVENT_MASK,
-            (uint32_t [1]){XCB_EVENT_MASK_STRUCTURE_NOTIFY | XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY});
+    xcb_change_window_attributes(
+        conn, scr->root, XCB_CW_EVENT_MASK,
+        (uint32_t[1]){XCB_EVENT_MASK_STRUCTURE_NOTIFY |
+                      XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY});
 
     return win;
 }
 
-xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, char *color, xcb_pixmap_t pixmap) {
+xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr,
+                                    char *color, xcb_pixmap_t pixmap) {
     uint32_t mask = 0;
     uint32_t values[3];
     xcb_window_t win = xcb_generate_id(conn);
@@ -202,34 +211,22 @@ xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, c
     values[1] = 1;
 
     mask |= XCB_CW_EVENT_MASK;
-    values[2] = XCB_EVENT_MASK_EXPOSURE |
-                XCB_EVENT_MASK_KEY_PRESS |
-                XCB_EVENT_MASK_KEY_RELEASE |
-                XCB_EVENT_MASK_VISIBILITY_CHANGE |
+    values[2] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_KEY_PRESS |
+                XCB_EVENT_MASK_KEY_RELEASE | XCB_EVENT_MASK_VISIBILITY_CHANGE |
                 XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
-    xcb_create_window(conn,
-                      XCB_COPY_FROM_PARENT,
-                      win,       /* the window id */
-                      scr->root, /* parent == root */
-                      0, 0,
-                      scr->width_in_pixels,
-                      scr->height_in_pixels, /* dimensions */
-                      0,                     /* border = 0, we draw our own */
-                      XCB_WINDOW_CLASS_INPUT_OUTPUT,
-                      XCB_WINDOW_CLASS_COPY_FROM_PARENT, /* copy visual from parent */
-                      mask,
-                      values);
+    xcb_create_window(
+        conn, XCB_COPY_FROM_PARENT, win,                   /* the window id */
+        scr->root,                                         /* parent == root */
+        0, 0, scr->width_in_pixels, scr->height_in_pixels, /* dimensions */
+        0, /* border = 0, we draw our own */
+        XCB_WINDOW_CLASS_INPUT_OUTPUT,
+        XCB_WINDOW_CLASS_COPY_FROM_PARENT, /* copy visual from parent */
+        mask, values);
 
     char *name = "i3lock";
-    xcb_change_property(conn,
-                        XCB_PROP_MODE_REPLACE,
-                        win,
-                        XCB_ATOM_WM_NAME,
-                        XCB_ATOM_STRING,
-                        8,
-                        strlen(name),
-                        name);
+    xcb_change_property(conn, XCB_PROP_MODE_REPLACE, win, XCB_ATOM_WM_NAME,
+                        XCB_ATOM_STRING, 8, strlen(name), name);
 
     /* Map the window (= make it visible) */
     xcb_map_window(conn, win);
@@ -245,7 +242,8 @@ xcb_window_t open_fullscreen_window(xcb_connection_t *conn, xcb_screen_t *scr, c
  * Repeatedly tries to grab pointer and keyboard (up to 1000 times).
  *
  */
-void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen, xcb_cursor_t cursor) {
+void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen,
+                               xcb_cursor_t cursor) {
     xcb_grab_pointer_cookie_t pcookie;
     xcb_grab_pointer_reply_t *preply;
 
@@ -257,13 +255,13 @@ void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen, xcb
     while (tries-- > 0) {
         pcookie = xcb_grab_pointer(
             conn,
-            false,               /* get all pointer events specified by the following mask */
+            false, /* get all pointer events specified by the following mask */
             screen->root,        /* grab the root window */
             XCB_NONE,            /* which events to let through */
             XCB_GRAB_MODE_ASYNC, /* pointer events should continue as normal */
             XCB_GRAB_MODE_ASYNC, /* keyboard mode */
-            XCB_NONE,            /* confine_to = in which window should the cursor stay */
-            cursor,              /* we change the cursor to whatever the user wanted */
+            XCB_NONE, /* confine_to = in which window should the cursor stay */
+            cursor,   /* we change the cursor to whatever the user wanted */
             XCB_CURRENT_TIME);
 
         if ((preply = xcb_grab_pointer_reply(conn, pcookie, NULL)) &&
@@ -277,13 +275,13 @@ void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen, xcb
     }
 
     while (tries-- > 0) {
-        kcookie = xcb_grab_keyboard(
-            conn,
-            true,         /* report events */
-            screen->root, /* grab the root window */
-            XCB_CURRENT_TIME,
-            XCB_GRAB_MODE_ASYNC, /* process events as normal, do not require sync */
-            XCB_GRAB_MODE_ASYNC);
+        kcookie = xcb_grab_keyboard(conn, true,   /* report events */
+                                    screen->root, /* grab the root window */
+                                    XCB_CURRENT_TIME,
+                                    XCB_GRAB_MODE_ASYNC, /* process events as
+                                                            normal, do not
+                                                            require sync */
+                                    XCB_GRAB_MODE_ASYNC);
 
         if ((kreply = xcb_grab_keyboard_reply(conn, kcookie, NULL)) &&
             kreply->status == XCB_GRAB_STATUS_SUCCESS) {
@@ -299,7 +297,8 @@ void grab_pointer_and_keyboard(xcb_connection_t *conn, xcb_screen_t *screen, xcb
         errx(EXIT_FAILURE, "Cannot grab pointer/keyboard");
 }
 
-xcb_cursor_t create_cursor(xcb_connection_t *conn, xcb_screen_t *screen, xcb_window_t win, int choice) {
+xcb_cursor_t create_cursor(xcb_connection_t *conn, xcb_screen_t *screen,
+                           xcb_window_t win, int choice) {
     xcb_pixmap_t bitmap;
     xcb_pixmap_t mask;
     xcb_cursor_t cursor;
@@ -323,37 +322,21 @@ xcb_cursor_t create_cursor(xcb_connection_t *conn, xcb_screen_t *screen, xcb_win
             break;
         case CURS_DEFAULT:
         default:
-            return XCB_NONE; /* XCB_NONE is xcb's way of saying "don't change the cursor" */
+            return XCB_NONE; /* XCB_NONE is xcb's way of saying "don't change
+                                the cursor" */
     }
 
-    bitmap = xcb_create_pixmap_from_bitmap_data(conn,
-                                                win,
-                                                curs_bits,
-                                                curs_w,
-                                                curs_h,
-                                                1,
-                                                screen->white_pixel,
-                                                screen->black_pixel,
-                                                NULL);
+    bitmap = xcb_create_pixmap_from_bitmap_data(conn, win, curs_bits, curs_w,
+                                                curs_h, 1, screen->white_pixel,
+                                                screen->black_pixel, NULL);
 
-    mask = xcb_create_pixmap_from_bitmap_data(conn,
-                                              win,
-                                              mask_bits,
-                                              curs_w,
-                                              curs_h,
-                                              1,
-                                              screen->white_pixel,
-                                              screen->black_pixel,
-                                              NULL);
+    mask = xcb_create_pixmap_from_bitmap_data(conn, win, mask_bits, curs_w,
+                                              curs_h, 1, screen->white_pixel,
+                                              screen->black_pixel, NULL);
 
     cursor = xcb_generate_id(conn);
 
-    xcb_create_cursor(conn,
-                      cursor,
-                      bitmap,
-                      mask,
-                      65535, 65535, 65535,
-                      0, 0, 0,
+    xcb_create_cursor(conn, cursor, bitmap, mask, 65535, 65535, 65535, 0, 0, 0,
                       0, 0);
 
     xcb_free_pixmap(conn, bitmap);
