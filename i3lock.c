@@ -89,6 +89,7 @@ const xcb_query_extension_reply_t *dam_ext_data;
 cairo_surface_t *img = NULL;
 bool tile = false;
 bool fuzzy = false;
+bool once = false;
 int blur_radius = 0;
 float blur_sigma = 0;
 bool ignore_empty_password = false;
@@ -559,7 +560,7 @@ static void create_damage(xcb_connection_t *conn, xcb_window_t window,
 static void handle_map_notify(xcb_map_notify_event_t *event) {
     maybe_close_sleep_lock_fd();
 
-    if (fuzzy) {
+    if (fuzzy && !once) {
         /* Create damage objects for new windows */
         xcb_get_window_attributes_reply_t *attribs =
             xcb_get_window_attributes_reply(
@@ -789,7 +790,7 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
 
             /* Ignore errors when damage report is about destroyed window
              * or damage object is created for already destroyed window */
-            if (error->major_code == dam_ext_data->major_opcode &&
+            if (!once && error->major_code == dam_ext_data->major_opcode &&
                 (error->minor_code == XCB_DAMAGE_SUBTRACT ||
                  error->minor_code == XCB_DAMAGE_CREATE)) {
                 free(event);
@@ -805,7 +806,7 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
             continue;
         }
 
-        if (fuzzy &&
+        if (fuzzy && !once &&
             event->response_type ==
                 dam_ext_data->first_event + XCB_DAMAGE_NOTIFY) {
             xcb_damage_notify_event_t *ev = (xcb_damage_notify_event_t *)event;
@@ -935,6 +936,7 @@ int main(int argc, char *argv[]) {
         {"image", required_argument, NULL, 'i'},
         {"tiling", no_argument, NULL, 't'},
         {"fuzzy", no_argument, NULL, 'f'},
+        {"once", no_argument, NULL, 'o'},
         {"radius", required_argument, NULL, 'r'},
         {"sigma", required_argument, NULL, 's'},
         {"ignore-empty-password", no_argument, NULL, 'e'},
@@ -947,7 +949,7 @@ int main(int argc, char *argv[]) {
     if ((username = pw->pw_name) == NULL)
         errx(EXIT_FAILURE, "pw->pw_name is NULL.\n");
 
-    char *optstring = "hvnbdc:p:ui:tfr:s:eI:l";
+    char *optstring = "hvnbdc:op:ui:tfr:s:eI:l";
     while ((o = getopt_long(argc, argv, optstring, longopts, &optind)) != -1) {
         switch (o) {
             case 'v':
@@ -997,6 +999,9 @@ int main(int argc, char *argv[]) {
                 break;
             case 's':
                 sscanf(optarg, "%f", &blur_sigma);
+                break;
+            case 'o':
+                once = true;
                 break;
             case 'p':
                 if (!strcmp(optarg, "win")) {
@@ -1140,8 +1145,18 @@ int main(int argc, char *argv[]) {
     /* Pixmap on which the image is rendered to (if any) */
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
 
+    /* For once, store the blurred background as img */
+    if (fuzzy & once) {
+        blur_image_gl(0, bg_pixmap, last_resolution[0], last_resolution[1],
+                      blur_radius, blur_sigma);
+        img = cairo_xcb_surface_create(conn, bg_pixmap,
+                                       get_root_visual_type(screen),
+                                       last_resolution[0], last_resolution[1]);
+        bg_pixmap = draw_image(last_resolution);
+    }
+
     /* open the fullscreen window, already with the correct pixmap in place */
-    if (fuzzy) {
+    if (fuzzy && !once) {
         win = open_overlay_window(conn, screen);
     } else {
         win = open_fullscreen_window(conn, screen, color, bg_pixmap);
@@ -1155,7 +1170,7 @@ int main(int argc, char *argv[]) {
     grab_pointer_and_keyboard(conn, screen, cursor);
 
     maybe_close_sleep_lock_fd();
-    if (fuzzy) {
+    if (fuzzy && !once) {
         /* Set up damage notifications */
         set_up_damage_notifications(conn, screen);
     } else {
