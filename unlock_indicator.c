@@ -120,7 +120,8 @@ static void draw_unlock_indicator() {
     cairo_paint(ctx);
     cairo_restore(ctx);
 
-    if (unlock_state >= STATE_KEY_PRESSED && unlock_indicator) {
+    if (unlock_indicator &&
+        (unlock_state >= STATE_KEY_PRESSED || pam_state > STATE_PAM_IDLE)) {
         cairo_scale(ctx, scaling_factor(), scaling_factor());
         /* Draw a (centered) circle with transparent background. */
         cairo_set_line_width(ctx, 10.0);
@@ -132,9 +133,11 @@ static void draw_unlock_indicator() {
          * (currently verifying, wrong password, or default) */
         switch (pam_state) {
             case STATE_PAM_VERIFY:
+            case STATE_PAM_LOCK:
                 cairo_set_source_rgba(ctx, 0, 114.0 / 255, 255.0 / 255, 0.75);
                 break;
             case STATE_PAM_WRONG:
+            case STATE_I3LOCK_LOCK_FAILED:
                 cairo_set_source_rgba(ctx, 250.0 / 255, 0, 0, 0.75);
                 break;
             default:
@@ -145,9 +148,11 @@ static void draw_unlock_indicator() {
 
         switch (pam_state) {
             case STATE_PAM_VERIFY:
+            case STATE_PAM_LOCK:
                 cairo_set_source_rgb(ctx, 51.0 / 255, 0, 250.0 / 255);
                 break;
             case STATE_PAM_WRONG:
+            case STATE_I3LOCK_LOCK_FAILED:
                 cairo_set_source_rgb(ctx, 125.0 / 255, 51.0 / 255, 0);
                 break;
             case STATE_PAM_IDLE:
@@ -171,13 +176,20 @@ static void draw_unlock_indicator() {
         char buf[4];
 
         cairo_set_source_rgb(ctx, 0, 0, 0);
+        cairo_select_font_face(ctx, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_font_size(ctx, 28.0);
         switch (pam_state) {
             case STATE_PAM_VERIFY:
                 text = "verifying…";
                 break;
+            case STATE_PAM_LOCK:
+                text = "locking…";
+                break;
             case STATE_PAM_WRONG:
                 text = "wrong!";
+                break;
+            case STATE_I3LOCK_LOCK_FAILED:
+                text = "lock failed!";
                 break;
             default:
                 if (show_failed_attempts && failed_attempts > 0) {
@@ -248,11 +260,12 @@ static void draw_unlock_indicator() {
                       BUTTON_RADIUS /* radius */, highlight_start /* start */,
                       highlight_start + (M_PI / 128.0) /* end */);
             cairo_stroke(ctx);
-            cairo_arc(
-                ctx, BUTTON_CENTER /* x */, BUTTON_CENTER /* y */,
-                BUTTON_RADIUS /* radius */,
-                highlight_start + (M_PI / 3.0) /* start */,
-                (highlight_start + (M_PI / 3.0)) + (M_PI / 128.0) /* end */);
+            cairo_arc(ctx,
+                      BUTTON_CENTER /* x */,
+                      BUTTON_CENTER /* y */,
+                      BUTTON_RADIUS /* radius */,
+                      (highlight_start + (M_PI / 3.0)) - (M_PI / 128.0) /* start */,
+                      highlight_start + (M_PI / 3.0) /* end */);
             cairo_stroke(ctx);
         }
     }
@@ -370,6 +383,8 @@ void redraw_screen(void) {
                 return;
         }
     }
+
+    DEBUG("redraw_screen(unlock_state = %d, pam_state = %d)\n", unlock_state, pam_state);
 
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
     xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXMAP,

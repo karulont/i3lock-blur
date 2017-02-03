@@ -31,7 +31,6 @@ Requirements
 - libev
 - libx11-dev
 - libx11-xcb-dev
-- libxkbfile-dev
 - libxkbcommon >= 0.5.0
 - libxkbcommon-x11 >= 0.5.0
 - libGL

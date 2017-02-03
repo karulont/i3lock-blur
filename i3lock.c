@@ -46,11 +46,12 @@
 #define STOP_TIMER(timer_obj) timer_obj = stop_timer(timer_obj)
 
 typedef void (*ev_callback_t)(EV_P_ ev_timer *w, int revents);
+static void input_done(void);
+static void maybe_close_sleep_lock_fd(void);
 
 /* We need this for libxkbfile */
 Display *display;
 char color[7] = "ffffff";
-int inactivity_timeout = 30;
 uint32_t last_resolution[2];
 xcb_window_t win;
 static xcb_cursor_t cursor;
@@ -73,6 +74,7 @@ extern unlock_state_t unlock_state;
 extern pam_state_t pam_state;
 int failed_attempts = 0;
 bool show_failed_attempts = false;
+bool retry_verification = false;
 
 static struct xkb_state *xkb_state;
 static struct xkb_context *xkb_context;
@@ -210,6 +212,17 @@ ev_timer *stop_timer(ev_timer *timer_obj) {
 }
 
 /*
+ * Neccessary calls after ending input via enter or others
+ *
+ */
+static void finish_input(void) {
+    password[input_position] = '\0';
+    unlock_state = STATE_KEY_PRESSED;
+    redraw_screen();
+    input_done();
+}
+
+/*
  * Resets pam_state to STATE_PAM_IDLE 2 seconds after an unsuccessful
  * authentication event.
  *
@@ -217,7 +230,6 @@ ev_timer *stop_timer(ev_timer *timer_obj) {
 static void clear_pam_wrong(EV_P_ ev_timer *w, int revents) {
     DEBUG("clearing pam wrong\n");
     pam_state = STATE_PAM_IDLE;
-    unlock_state = STATE_STARTED;
     redraw_unlock_indicator();
 
     /* Clear modifier string. */
@@ -228,6 +240,12 @@ static void clear_pam_wrong(EV_P_ ev_timer *w, int revents) {
 
     /* Now free this timeout. */
     STOP_TIMER(clear_pam_wrong_timeout);
+
+    /* retry with input done during pam verification */
+    if (retry_verification) {
+        retry_verification = false;
+        finish_input();
+    }
 }
 
 static void clear_indicator_cb(EV_P_ ev_timer *w, int revents) {
@@ -239,15 +257,6 @@ static void clear_input(void) {
     input_position = 0;
     clear_password_memory();
     password[input_position] = '\0';
-
-    /* Hide the unlock indicator after a bit if the password buffer is
-     * empty. */
-    if (unlock_indicator) {
-        START_TIMER(clear_indicator_timeout, 1.0, clear_indicator_cb);
-        unlock_state = STATE_BACKSPACE_ACTIVE;
-        redraw_unlock_indicator();
-        unlock_state = STATE_KEY_PRESSED;
-    }
 }
 
 static void discard_passwd_cb(EV_P_ ev_timer *w, int revents) {
@@ -258,6 +267,7 @@ static void discard_passwd_cb(EV_P_ ev_timer *w, int revents) {
 static void input_done(void) {
     STOP_TIMER(clear_pam_wrong_timeout);
     pam_state = STATE_PAM_VERIFY;
+    unlock_state = STATE_STARTED;
     redraw_unlock_indicator();
 
     if (pam_authenticate(pam_handle, 0) == PAM_SUCCESS) {
@@ -404,20 +414,24 @@ static void handle_key_press(xcb_key_press_event_t *event) {
     }
 
     switch (ksym) {
+        case XKB_KEY_j:
+        case XKB_KEY_m:
         case XKB_KEY_Return:
         case XKB_KEY_KP_Enter:
         case XKB_KEY_XF86ScreenSaver:
-            if (pam_state == STATE_PAM_WRONG)
+            if ((ksym == XKB_KEY_j || ksym == XKB_KEY_m) && !ctrl)
+                break;
+
+            if (pam_state == STATE_PAM_WRONG) {
+                retry_verification = true;
                 return;
+            }
 
             if (skip_without_validation()) {
                 clear_input();
                 return;
             }
-            password[input_position] = '\0';
-            unlock_state = STATE_KEY_PRESSED;
-            redraw_unlock_indicator();
-            input_done();
+            finish_input();
             skip_repeated_empty_password = true;
             return;
         default:
@@ -426,18 +440,36 @@ static void handle_key_press(xcb_key_press_event_t *event) {
 
     switch (ksym) {
         case XKB_KEY_u:
-            if (ctrl) {
+        case XKB_KEY_Escape:
+            if ((ksym == XKB_KEY_u && ctrl) ||
+                ksym == XKB_KEY_Escape) {
                 DEBUG("C-u pressed\n");
                 clear_input();
+                /* Hide the unlock indicator after a bit if the password buffer is
+                 * empty. */
+                if (unlock_indicator) {
+                    START_TIMER(clear_indicator_timeout, 1.0, clear_indicator_cb);
+                    unlock_state = STATE_BACKSPACE_ACTIVE;
+                    redraw_screen();
+                    unlock_state = STATE_KEY_PRESSED;
+                }
                 return;
             }
             break;
 
-        case XKB_KEY_Escape:
-            clear_input();
+        case XKB_KEY_Delete:
+        case XKB_KEY_KP_Delete:
+            /* Deleting forward doesn’t make sense, as i3lock doesn’t allow you
+             * to move the cursor when entering a password. We need to eat this
+             * key press so that it won’t be treated as part of the password,
+             * see issue #50. */
             return;
 
+        case XKB_KEY_h:
         case XKB_KEY_BackSpace:
+            if (ksym == XKB_KEY_h && !ctrl)
+                break;
+
             if (input_position == 0)
                 return;
 
@@ -446,7 +478,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
             password[input_position] = '\0';
 
             /* Hide the unlock indicator after a bit if the password buffer is
-         * empty. */
+             * empty. */
             START_TIMER(clear_indicator_timeout, 1.0, clear_indicator_cb);
             unlock_state = STATE_BACKSPACE_ACTIVE;
             redraw_unlock_indicator();
@@ -525,6 +557,8 @@ static void create_damage(xcb_connection_t *conn, xcb_window_t window,
 }
 
 static void handle_map_notify(xcb_map_notify_event_t *event) {
+    maybe_close_sleep_lock_fd();
+
     if (fuzzy) {
         /* Create damage objects for new windows */
         xcb_get_window_attributes_reply_t *attribs =
@@ -532,8 +566,10 @@ static void handle_map_notify(xcb_map_notify_event_t *event) {
                 conn, xcb_get_window_attributes(conn, event->window), NULL);
         create_damage(conn, event->window, attribs);
     }
+
     if (!dont_fork) {
-        /* After the first MapNotify, we never fork again. */
+        /* After the first MapNotify, we never fork again. We don’t
+         * expect to get another MapNotify, but better be sure… */
         dont_fork = true;
 
         /* In the parent process, we exit */
@@ -717,6 +753,22 @@ static void set_up_damage_notifications(xcb_connection_t *conn,
     }
     free(attribs);
     free(reply);
+}
+
+/*
+ * Try closing logind sleep lock fd passed over from xss-lock, in case we're
+ * being run from there.
+ *
+ */
+static void maybe_close_sleep_lock_fd(void) {
+    const char *sleep_lock_fd = getenv("XSS_SLEEP_LOCK_FD");
+    char *endptr;
+    if (sleep_lock_fd && *sleep_lock_fd != 0) {
+        long int fd = strtol(sleep_lock_fd, &endptr, 10);
+        if (*endptr == 0) {
+            close(fd);
+        }
+    }
 }
 
 /*
@@ -912,11 +964,7 @@ int main(int argc, char *argv[]) {
                                 "Please see the manpage i3lock(1).\n");
                 break;
             case 'I': {
-                int time = 0;
-                if (sscanf(optarg, "%d", &time) != 1 || time < 0)
-                    errx(EXIT_FAILURE,
-                         "invalid timeout, it must be a positive integer\n");
-                inactivity_timeout = time;
+                fprintf(stderr, "Inactivity timeout only makes sense with DPMS, which was removed. Please see the manpage i3lock(1).\n");
                 break;
             }
             case 'c': {
@@ -984,8 +1032,10 @@ int main(int argc, char *argv[]) {
     srand(time(NULL));
 
     /* Initialize PAM */
-    ret = pam_start("i3lock", username, &conv, &pam_handle);
-    if (ret != PAM_SUCCESS)
+    if ((ret = pam_start("i3lock", username, &conv, &pam_handle)) != PAM_SUCCESS)
+        errx(EXIT_FAILURE, "PAM: %s", pam_strerror(pam_handle, ret));
+
+    if ((ret = pam_set_item(pam_handle, PAM_TTY, getenv("DISPLAY"))) != PAM_SUCCESS)
         errx(EXIT_FAILURE, "PAM: %s", pam_strerror(pam_handle, ret));
 
 /* Using mlock() as non-super-user seems only possible in Linux. Users of other
@@ -1080,6 +1130,7 @@ int main(int argc, char *argv[]) {
                     cairo_status_to_string(cairo_surface_status(img)));
             img = NULL;
         }
+        free(image_path);
     }
 
     if (fuzzy) {
@@ -1097,6 +1148,13 @@ int main(int argc, char *argv[]) {
     }
     xcb_free_pixmap(conn, bg_pixmap);
 
+    cursor = create_cursor(conn, screen, win, curs_choice);
+
+    /* Display the "locking…" message while trying to grab the pointer/keyboard. */
+    pam_state = STATE_PAM_LOCK;
+    grab_pointer_and_keyboard(conn, screen, cursor);
+
+    maybe_close_sleep_lock_fd();
     if (fuzzy) {
         /* Set up damage notifications */
         set_up_damage_notifications(conn, screen);
@@ -1112,9 +1170,7 @@ int main(int argc, char *argv[]) {
             exit(EXIT_SUCCESS);
         }
     }
-    cursor = create_cursor(conn, screen, win, curs_choice);
 
-    grab_pointer_and_keyboard(conn, screen, cursor);
     /* Load the keymap again to sync the current modifier state. Since we first
      * loaded the keymap, there might have been changes, but starting from now,
      * we should get all key presses/releases due to having grabbed the
@@ -1125,6 +1181,10 @@ int main(int argc, char *argv[]) {
     main_loop = EV_DEFAULT;
     if (main_loop == NULL)
         errx(EXIT_FAILURE, "Could not initialize libev. Bad LIBEV_FLAGS?\n");
+
+    /* Explicitly call the screen redraw in case "locking…" message was displayed */
+    pam_state = STATE_PAM_IDLE;
+    redraw_screen();
 
     struct ev_io *xcb_watcher = calloc(sizeof(struct ev_io), 1);
     struct ev_check *xcb_check = calloc(sizeof(struct ev_check), 1);
