@@ -60,6 +60,8 @@ extern bool tile;
 extern bool fuzzy;
 extern int blur_radius;
 extern float blur_sigma;
+/* to blur the screen only once */
+extern bool once;
 /* The background color to use (in hex). */
 extern char color[7];
 extern Display *display;
@@ -284,7 +286,7 @@ xcb_pixmap_t draw_image(uint32_t *resolution) {
     cairo_t *xcb_ctx = cairo_create(xcb_output);
 
     if (img || fuzzy) {
-        if (fuzzy) {
+        if (fuzzy && !once) {
             blur_image_gl(0, bg_pixmap, last_resolution[0], last_resolution[1],
                           blur_radius, blur_sigma);
             cairo_surface_t *tmp = cairo_xcb_surface_create(
@@ -377,7 +379,9 @@ void redraw_screen(void) {
     /* XXX: Possible optimization: Only update the area in the middle of the
      * screen instead of the whole screen. */
     xcb_clear_area(conn, 0, win, 0, 0, last_resolution[0], last_resolution[1]);
-    xcb_free_pixmap(conn, bg_pixmap);
+    if (!once) {
+        xcb_free_pixmap(conn, bg_pixmap);
+    }
     xcb_flush(conn);
 }
 
