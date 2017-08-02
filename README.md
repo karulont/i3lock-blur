@@ -37,14 +37,23 @@ Requirements
 
 Install packages in Ubuntu
 
-  sudo apt-get install pkg-config libxcb1-dev libxcb1 libgl2ps-dev libx11-dev libglc0 libglc-dev libcairo2-dev libcairo-gobject2 libcairo2-dev libxkbfile-dev libxkbfile1 libxkbcommon-dev libxkbcommon-x11-dev libxcb-xkb-dev libxcb-dpms0-dev libxcb-damage0-dev libpam0g-dev libev-dev libxcb-image0-dev libxcb-util0-dev libxcb-composite0-dev libxcb-xinerama0-dev
+  sudo apt-get install pkg-config libxcb1-dev libxcb1 libgl2ps-dev libx11-dev
+  libglc0 libglc-dev libcairo2-dev libcairo-gobject2 libcairo2-dev
+  libxkbfile-dev libxkbfile1 libxkbcommon-dev libxkbcommon-x11-dev
+  libxcb-xkb-dev libxcb-dpms0-dev libxcb-damage0-dev libpam0g-dev libev-dev
+  libxcb-image0-dev libxcb-util0-dev libxcb-composite0-dev libxcb-xinerama0-dev
 
 Running i3lock
 -------------
 Simply invoke the 'i3lock' command. To get out of it, enter your password and
 press enter.
 
+To run i3lock with the blurring, please use the `--fuzzy` option. The amount of
+blurring can be changed with the `--radius` and `--sigma` flags. Please check
+the man page.
+
 Upstream
 --------
 Please submit general pull requests to https://github.com/i3/i3lock
-Everything related to blurring mode should be submitted to https://github.com/karulont/i3lock-blur
+Everything related to blurring mode should be submitted to
+https://github.com/karulont/i3lock-blur
