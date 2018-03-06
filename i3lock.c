@@ -1323,6 +1323,10 @@ int main(int argc, char *argv[]) {
     }
     ev_loop(main_loop, 0);
 
+    if (fuzzy) {
+        glx_deinit();
+    }
+
     if (stolen_focus == XCB_NONE) {
         return 0;
     }

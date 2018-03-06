@@ -279,6 +279,9 @@ void glx_deinit(void) {
     glDeleteShader(v_shader);
     glDeleteShader(f_shader);
     glDeleteProgram(shader_prog);
+    glXDestroyContext(display, ctx);
+    XFree(vis);
+    XFree(configs);
 }
 
 void blur_image_gl(int scr, Pixmap pixmap, int width, int height, int radius,
