@@ -21,7 +21,7 @@
 #include "i3lock.h"
 #include "unlock_indicator.h"
 #include "xcb.h"
-#include "xinerama.h"
+#include "randr.h"
 
 #define BUTTON_RADIUS 90
 #define BUTTON_SPACE (BUTTON_RADIUS + 5)
@@ -88,7 +88,7 @@ static xcb_visualtype_t *vistype;
 /* Maintain the current unlock/PAM state to draw the appropriate unlock
  * indicator. */
 unlock_state_t unlock_state;
-pam_state_t pam_state;
+auth_state_t auth_state;
 
 /* A surface for the unlock indicator */
 static cairo_surface_t *unlock_indicator_surface = NULL;
@@ -123,7 +123,7 @@ static void draw_unlock_indicator() {
     cairo_restore(ctx);
 
     if (unlock_indicator &&
-        (unlock_state >= STATE_KEY_PRESSED || pam_state > STATE_PAM_IDLE)) {
+        (unlock_state >= STATE_KEY_PRESSED || auth_state > STATE_AUTH_IDLE)) {
         cairo_scale(ctx, scaling_factor(), scaling_factor());
         /* Draw a (centered) circle with transparent background. */
         cairo_set_line_width(ctx, 10.0);
@@ -133,31 +133,40 @@ static void draw_unlock_indicator() {
 
         /* Use the appropriate color for the different PAM states
          * (currently verifying, wrong password, or default) */
-        switch (pam_state) {
-            case STATE_PAM_VERIFY:
-            case STATE_PAM_LOCK:
+        switch (auth_state) {
+            case STATE_AUTH_VERIFY:
+            case STATE_AUTH_LOCK:
                 cairo_set_source_rgba(ctx, 0, 114.0 / 255, 255.0 / 255, 0.75);
                 break;
-            case STATE_PAM_WRONG:
+            case STATE_AUTH_WRONG:
             case STATE_I3LOCK_LOCK_FAILED:
                 cairo_set_source_rgba(ctx, 250.0 / 255, 0, 0, 0.75);
                 break;
             default:
+                if (unlock_state == STATE_NOTHING_TO_DELETE) {
+                    cairo_set_source_rgba(ctx, 250.0 / 255, 0, 0, 0.75);
+                    break;
+                }
                 cairo_set_source_rgba(ctx, 0, 0, 0, 0.75);
                 break;
         }
         cairo_fill_preserve(ctx);
 
-        switch (pam_state) {
-            case STATE_PAM_VERIFY:
-            case STATE_PAM_LOCK:
+        switch (auth_state) {
+            case STATE_AUTH_VERIFY:
+            case STATE_AUTH_LOCK:
                 cairo_set_source_rgb(ctx, 51.0 / 255, 0, 250.0 / 255);
                 break;
-            case STATE_PAM_WRONG:
+            case STATE_AUTH_WRONG:
             case STATE_I3LOCK_LOCK_FAILED:
                 cairo_set_source_rgb(ctx, 125.0 / 255, 51.0 / 255, 0);
                 break;
-            case STATE_PAM_IDLE:
+            case STATE_AUTH_IDLE:
+                if (unlock_state == STATE_NOTHING_TO_DELETE) {
+                    cairo_set_source_rgb(ctx, 125.0 / 255, 51.0 / 255, 0);
+                    break;
+                }
+
                 cairo_set_source_rgb(ctx, 51.0 / 255, 125.0 / 255, 0);
                 break;
         }
@@ -180,20 +189,23 @@ static void draw_unlock_indicator() {
         cairo_set_source_rgb(ctx, 0, 0, 0);
         cairo_select_font_face(ctx, "sans-serif", CAIRO_FONT_SLANT_NORMAL, CAIRO_FONT_WEIGHT_NORMAL);
         cairo_set_font_size(ctx, 28.0);
-        switch (pam_state) {
-            case STATE_PAM_VERIFY:
+        switch (auth_state) {
+            case STATE_AUTH_VERIFY:
                 text = "verifying…";
                 break;
-            case STATE_PAM_LOCK:
+            case STATE_AUTH_LOCK:
                 text = "locking…";
                 break;
-            case STATE_PAM_WRONG:
+            case STATE_AUTH_WRONG:
                 text = "wrong!";
                 break;
             case STATE_I3LOCK_LOCK_FAILED:
                 text = "lock failed!";
                 break;
             default:
+                if (unlock_state == STATE_NOTHING_TO_DELETE) {
+                    text = "no input";
+                }
                 if (show_failed_attempts && failed_attempts > 0) {
                     if (failed_attempts > 999) {
                         text = "> 999";
@@ -220,7 +232,7 @@ static void draw_unlock_indicator() {
             cairo_close_path(ctx);
         }
 
-        if (pam_state == STATE_PAM_WRONG && (modifier_string != NULL)) {
+        if (auth_state == STATE_AUTH_WRONG && (modifier_string != NULL)) {
             cairo_text_extents_t extents;
             double x, y;
 
@@ -386,8 +398,7 @@ void redraw_screen(void) {
         }
     }
 
-    DEBUG("redraw_screen(unlock_state = %d, pam_state = %d)\n", unlock_state, pam_state);
-
+    DEBUG("redraw_screen(unlock_state = %d, auth_state = %d)\n", unlock_state, auth_state);
     xcb_pixmap_t bg_pixmap = draw_image(last_resolution);
     xcb_change_window_attributes(conn, win, XCB_CW_BACK_PIXMAP,
                                  (uint32_t[1]){bg_pixmap});

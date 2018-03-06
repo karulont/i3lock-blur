@@ -19,6 +19,7 @@ Many little improvements have been made to i3lock over time:
 - You can specify whether i3lock should bell upon a wrong password.
 
 - i3lock uses PAM and therefore is compatible with LDAP etc.
+  On OpenBSD i3lock uses the bsd_auth(3) framework.
 
 Requirements
 ------------
@@ -28,6 +29,7 @@ Requirements
 - libpam-dev
 - libcairo-dev
 - libxcb-xinerama
+- libxcb-randr
 - libev
 - libx11-dev
 - libx11-xcb-dev
@@ -51,6 +53,9 @@ press enter.
 To run i3lock with the blurring, please use the `--fuzzy` option. The amount of
 blurring can be changed with the `--radius` and `--sigma` flags. Please check
 the man page.
+
+On OpenBSD the `i3lock` binary needs to be setgid `auth` to call the
+authentication helpers, e.g. `/usr/libexec/auth/login_passwd`.
 
 Upstream
 --------
