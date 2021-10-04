@@ -41,7 +41,7 @@ Install packages in Ubuntu
 
   sudo apt-get install pkg-config libxcb1-dev libxcb1 libgl2ps-dev libx11-dev
   libglc0 libglc-dev libcairo2-dev libcairo-gobject2 libcairo2-dev
-  libxkbfile-dev libxkbfile1 libxkbcommon-dev libxkbcommon-x11-dev
+  libxkbfile-dev libxkbfile1 libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev
   libxcb-xkb-dev libxcb-dpms0-dev libxcb-damage0-dev libpam0g-dev libev-dev
   libxcb-image0-dev libxcb-util0-dev libxcb-composite0-dev libxcb-xinerama0-dev
 
