@@ -237,7 +237,7 @@ ev_timer *stop_timer(ev_timer *timer_obj) {
 static void finish_input(void) {
     password[input_position] = '\0';
     unlock_state = STATE_KEY_PRESSED;
-    redraw_unlock_indicator();
+    redraw_screen();
     input_done();
 }
 
@@ -497,7 +497,7 @@ static void handle_key_press(xcb_key_press_event_t *event) {
             if (input_position == 0) {
                 START_TIMER(clear_indicator_timeout, 1.0, clear_indicator_cb);
                 unlock_state = STATE_NOTHING_TO_DELETE;
-                redraw_unlock_indicator();
+                redraw_screen();
                 return;
             }
 
@@ -687,14 +687,14 @@ static void handle_screen_resize(void) {
     glx_resize(last_resolution[0], last_resolution[1]);
 
     resize_screen();
-    redraw_unlock_indicator();
+    redraw_screen();
 
     uint32_t mask = XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT;
     xcb_configure_window(conn, win, mask, last_resolution);
     xcb_flush(conn);
 
     randr_query(screen->root);
-    redraw_unlock_indicator();
+    redraw_screen();
 }
 
 static bool verify_png_image(const char *image_path) {
@@ -868,7 +868,7 @@ static void xcb_check_cb(EV_P_ ev_check *w, int revents) {
                 dam_ext_data->first_event + XCB_DAMAGE_NOTIFY) {
             xcb_damage_notify_event_t *ev = (xcb_damage_notify_event_t *)event;
             xcb_damage_subtract(conn, ev->damage, XCB_NONE, XCB_NONE);
-            redraw_unlock_indicator();
+            redraw_screen();
         }
 
         /* Strip off the highest bit (set if the event is generated) */
@@ -1264,7 +1264,7 @@ int main(int argc, char *argv[]) {
         xcb_set_input_focus(conn, XCB_INPUT_FOCUS_PARENT /* revert_to */, win, XCB_CURRENT_TIME);
         if (!grab_pointer_and_keyboard(conn, screen, cursor, 9000)) {
             auth_state = STATE_I3LOCK_LOCK_FAILED;
-            redraw_unlock_indicator();
+            redraw_screen();
             sleep(1);
             errx(EXIT_FAILURE, "Cannot grab pointer/keyboard");
         }
@@ -1300,7 +1300,7 @@ int main(int argc, char *argv[]) {
 
     /* Explicitly call the screen redraw in case "locking…" message was displayed */
     auth_state = STATE_AUTH_IDLE;
-    redraw_unlock_indicator();
+    redraw_screen();
 
     struct ev_io *xcb_watcher = calloc(sizeof(struct ev_io), 1);
     struct ev_check *xcb_check = calloc(sizeof(struct ev_check), 1);
