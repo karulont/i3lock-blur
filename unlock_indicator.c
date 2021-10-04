@@ -430,7 +430,7 @@ void clear_indicator(void) {
         unlock_state = STATE_STARTED;
     } else
         unlock_state = STATE_KEY_PRESSED;
-    redraw_unlock_indicator();
+    redraw_screen();
 }
 
 /*
